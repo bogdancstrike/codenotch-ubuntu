@@ -23,7 +23,7 @@ shell launches asynchronously and reads back as a single JSON snapshot.
 | `backend/codenotch/providers.py` | Worker | Credential discovery and the seven usage adapters |
 | `backend/codenotch/model.py` | Worker | Payload parsers. Missing data stays missing |
 | `backend/codenotch/activity.py` | Worker | Which AI sessions are running right now |
-| `backend/codenotch/widgets.py` | Worker | Weather, battery, and `/proc` load |
+| `backend/codenotch/widgets.py` | Worker | Weather, battery, and `/proc` + `statvfs` load |
 
 `render.js` has no GNOME imports. That is deliberate: the same module draws the README
 images through `scripts/render-shell-preview.js` (real Pango, real cairo) and through the
@@ -166,6 +166,11 @@ percentage.
 `widgetCard` for its hover card, a row in `prefs.js`, and — only if it needs data the shell
 cannot compute — a collector in `widgets.py`. Prefer the shell: the clock costs nothing
 because it never leaves the shell.
+
+If a collector caches, it must read and write the *same* key. `widgets.collect()` stores
+each reading back into the cache dict it was handed, because `weather()` and
+`needs_network()` both look for `cache['weather']` — an earlier version wrote it one level
+deeper, so nothing was ever cached and every poll became a fresh request.
 
 **A new provider** needs a `Provider` entry in `discover()`, a branch in `Provider.fetch`,
 a parser in `model.py`, and a glyph. The parser must raise rather than invent a number.

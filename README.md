@@ -47,8 +47,9 @@ provider you switch off is not polled, not read, and not detected — the enable
 happens *before* any credential is touched.
 
 **It is a desktop widget too.** Clock, date, weather, battery and system load live in the
-same notch, after your rings and before the gear. The clock and date never leave the shell;
-the weather is one request every fifteen minutes.
+same notch, after your rings and before the gear. Hover any of them for a card — the full
+date and ISO week, feels-like and wind, or how much memory and disk you have left. The
+clock and date never leave the shell; the weather is one request every fifteen minutes.
 
 **It stays out of the way.** At rest it is a sliver at the edge with a small light handle.
 Hover and it springs open — a real spring, so interrupting it mid-animation continues from
@@ -59,7 +60,7 @@ clickable. Reactivity follows the drawing, never the intent. A pointer guard fol
 left open once a second. The popup menu is always closed before it is rebuilt or destroyed.
 
 <div align="center">
-<img src="docs/preview-widgets.png" alt="The same notch with no widgets, then clock and date, then weather, then system load" width="760">
+<img src="docs/preview-widgets.png" alt="The same notch with no widgets, then clock and date, then weather, then CPU, RAM and SSD meters" width="760">
 <br><em>Rings only, or add exactly the widgets you want.</em>
 </div>
 
@@ -104,7 +105,7 @@ AI rings and before the gear, separated by a divider.
 | **Date** | Weekday and day, in three styles | None |
 | **Weather** | Condition symbol and temperature; hover for feels-like, high/low, humidity, wind | One request per 15 minutes |
 | **Battery** | Charge and charging state; hides itself on desktops | A `/sys` read |
-| **System load** | CPU and memory meters | Two `/proc` reads |
+| **System load** | CPU, RAM and SSD meters; hover for free-of-total | Two `/proc` reads and a `statvfs` |
 
 Weather uses [Open-Meteo](https://open-meteo.com/): no account, no API key, and no
 identifiers are sent — just the coordinates of the place you pick. Search for a city in
@@ -118,7 +119,7 @@ city the notch cannot use.
 
 ## Settings
 
-Three pages, all native libadwaita.
+Four pages, all native libadwaita.
 
 **Connections** — a row per AI with its usage source, connection status, allowance windows,
 last successful reading, and a **Verify** button that actually performs the request.
@@ -130,6 +131,10 @@ search, and units.
 **Appearance** — visibility (on hover / always / hidden), the resting sliver, screen edge
 (right, left, top, bottom), monitor, size (75%–200%), top-panel icon, hiding over fullscreen
 windows, and **text contrast** in three tiers.
+
+**About** — what this build is, the repository, and what this install is currently doing:
+how many AIs are enabled, which widgets are on, your refresh cadence, and where your
+settings live.
 
 <div align="center">
 <img src="docs/preview-edges.png" alt="The notch on the top and bottom screen edges" width="680">
