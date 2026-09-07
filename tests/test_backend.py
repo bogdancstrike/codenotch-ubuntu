@@ -66,9 +66,16 @@ class State(unittest.TestCase):
         self.assertNotIn('claude:.claude-flow',[p.id for p in discover(self.home,self.config,self.data)])
     def test_antigravity_cli_counts_as_signed_in(self):
         self.assertFalse(antigravity_signed_in(self.home,self.config))
-        (self.home/'.gemini/antigravity-cli').mkdir(parents=True)
-        atomic_json(self.home/'.gemini/oauth_creds.json',{'access_token':'x'})
+        cli=self.home/'.gemini/antigravity-cli'; cli.mkdir(parents=True)
+        self.assertFalse(antigravity_signed_in(self.home,self.config))  # installed but never run
+        (cli/'cache').mkdir()
         self.assertTrue(antigravity_signed_in(self.home,self.config))
+    def test_detection_never_touches_the_keyring(self):
+        # A gi import plus a DBus round trip on every snapshot would dwarf the
+        # cost of the rest of the run.
+        (self.home/'.gemini/antigravity-cli/cache').mkdir(parents=True)
+        with patch('codenotch.providers.keyring_token',side_effect=AssertionError('keyring read during detection')):
+            self.assertTrue(antigravity_signed_in(self.home,self.config))
     def test_disable_never_reads_credentials_and_purges(self):
         with patch('codenotch.worker.detected',side_effect=AssertionError('read disabled credentials')):
             out=update_provider(self.p,{'windows':[{'fraction':.73}]},{**DEFAULTS,'disabled':['claude']},self.home,self.config,self.data,'all')

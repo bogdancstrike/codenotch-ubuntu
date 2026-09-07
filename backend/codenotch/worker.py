@@ -6,12 +6,10 @@ non-blocking lock, so a slow provider can never make a settings change — or th
 preferences window — hang behind it.
 """
 import argparse
-import concurrent.futures
 import errno
 import fcntl
 import json
 import os
-import tempfile
 import time
 from pathlib import Path
 from . import __version__
@@ -41,14 +39,21 @@ def locations():
     return home,Path(os.environ.get('XDG_CONFIG_HOME',str(home/'.config'))),Path(os.environ.get('XDG_DATA_HOME',str(home/'.local/share'))),Path(os.environ.get('XDG_CACHE_HOME',str(home/'.cache')))
 
 def atomic_json(path, value):
+    """Write privately, then rename. Hand-rolled rather than via tempfile, whose
+    import alone costs more than the rest of an idle run."""
     path.parent.mkdir(mode=0o700,parents=True,exist_ok=True)
-    fd,tmp=tempfile.mkstemp(prefix='.tmp-',dir=path.parent)
+    tmp=path.parent/f'.tmp-{os.getpid()}-{path.name}'
     try:
+        try:
+            fd=os.open(tmp,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+        except FileExistsError:
+            os.unlink(tmp)   # a crashed run left this behind; we hold the lock
+            fd=os.open(tmp,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
         with os.fdopen(fd,'w') as stream:
             json.dump(value,stream,ensure_ascii=False,allow_nan=False); stream.flush(); os.fsync(stream.fileno())
         os.replace(tmp,path)
     finally:
-        if os.path.exists(tmp): os.unlink(tmp)
+        if tmp.exists(): os.unlink(tmp)
 
 class Lock:
     """flock helper. `blocking=False` reports contention instead of waiting."""
@@ -144,23 +149,32 @@ def demo_snapshot(providers,settings,cache_root):
 def source_name(p):
     return {'claude':'Claude Code OAuth · '+str(p.path/'.credentials.json'),'codex':'Codex sign-in · '+str(p.path/'auth.json'),'cursor':'Cursor signed-in SQLite session','gemini':'Antigravity IDE or `agy` CLI sign-in','glm':'Z.ai key borrowed from Claude Code, OpenCode, or ZCode','grok':'Grok CLI session · '+str(p.path),'opencode':'OpenCode Go key · '+str(p.path)}[p.kind]
 
-def update_provider(p,old,settings,home,config,data,force=None):
+def local_state(p,old,settings,home,config,data,force=None):
+    """Everything that cannot block: enablement, detection, running sessions.
+
+    Returns (row, needs_fetch). Runs serially, so a snapshot with nothing due
+    never creates a thread pool."""
     now=time.time(); meta={**p.meta(),'source':source_name(p),'enabled':p.id not in settings['disabled']}
     # This is before detection: disabled providers' credentials are never inspected.
     if not meta['enabled']:
-        return {**meta,'status':'disabled','detected':False,'windows':[],'sessions':[],'message':'Disconnected here. The owning tool remains signed in.'}
+        return {**meta,'status':'disabled','detected':False,'windows':[],'sessions':[],'message':'Disconnected here. The owning tool remains signed in.'},False
     try:
         exists=detected(p,home,config,data)
         activity=sessions(p)
     except (OSError,ValueError,TypeError,AttributeError):
-        return {**meta,'detected':True,'status':'error','windows':[], 'sessions':[], 'message':'The owning tool’s local state could not be read.'}
+        return {**meta,'detected':True,'status':'error','windows':[], 'sessions':[], 'message':'The owning tool’s local state could not be read.'},False
     base={**old,**meta,'detected':exists,'sessions':activity}
     if not exists:
-        return {**meta,'detected':False,'status':'needsAuth','windows':[],'sessions':[],'message':'No local sign-in found. Open the owning tool and sign in.'}
+        return {**meta,'detected':False,'status':'needsAuth','windows':[],'sessions':[],'message':'No local sign-in found. Open the owning tool and sign in.'},False
     deadline=max(old.get('retryAt',0),old.get('nextPoll',0) if force not in ('all',p.id) else 0)
     if deadline>now and old.get('status'):
-        return base
-    cadence=settings['pollSeconds'] if activity else settings['idlePollSeconds']
+        return base,False
+    return base,True
+
+def fetch_provider(p,base,old,settings,home,config,data):
+    """The blocking half: one usage request, with backoff bookkeeping."""
+    now=time.time()
+    cadence=settings['pollSeconds'] if base.get('sessions') else settings['idlePollSeconds']
     try:
         windows=p.fetch(home,config,data)
         return {**base,'status':'ok','windows':windows,'message':'Connection verified. Usage returned by the provider.','updatedAt':now,'checkedAt':now,'nextPoll':now+cadence,'retryAt':0,'failures':0}
@@ -170,6 +184,10 @@ def update_provider(p,old,settings,home,config,data,force=None):
         return {**base,'status':'stale' if old.get('windows') else err.status,'errorStatus':err.status,'message':err.message,'windows':old.get('windows',[]),'checkedAt':now,'nextPoll':now+delay,'retryAt':now+delay if err.status=='rateLimited' else 0,'failures':count}
     except (ValueError,TypeError,KeyError,AttributeError,OSError):
         return {**base,'status':'stale' if old.get('windows') else 'error','message':'Local state or provider response could not be parsed.','windows':old.get('windows',[]),'checkedAt':now,'nextPoll':now+max(60,cadence)}
+
+def update_provider(p,old,settings,home,config,data,force=None):
+    row,needs=local_state(p,old,settings,home,config,data,force)
+    return fetch_provider(p,row,old,settings,home,config,data) if needs else row
 
 def info_snapshot(providers,settings,old,widget_cache):
     return dict(version=__version__,settings=settings,widgets=widget_cache.get('current',{}),providers=[
@@ -195,11 +213,23 @@ def collect(args):
             # Another worker owns this cycle. Answer from cache instead of
             # queueing behind its network calls.
             return {**info_snapshot(providers,settings,old,widget_cache),'busy':True}
-        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
-            futures=[pool.submit(update_provider,p,old.get(p.id,{}),settings,home,config,data,args.verify) for p in providers]
-            widget_job=pool.submit(safe_widgets,settings,widget_cache,bool(args.verify or args.widgets))
-            rows=[f.result() for f in futures]
-            current=widget_job.result()
+        force_widgets=bool(args.verify or args.widgets)
+        rows=[];jobs=[]
+        for p in providers:
+            row,needs=local_state(p,old.get(p.id,{}),settings,home,config,data,args.verify)
+            rows.append(row)
+            if needs: jobs.append((len(rows)-1,p,row,old.get(p.id,{})))
+        if jobs or widget_module.needs_network(settings,widget_cache,force_widgets):
+            # Only now is a thread pool worth its import and its threads.
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(8,len(jobs)+1)) as pool:
+                pending={pool.submit(fetch_provider,p,row,previous,settings,home,config,data):index
+                         for index,p,row,previous in jobs}
+                widget_job=pool.submit(safe_widgets,settings,widget_cache,force_widgets)
+                for future,index in pending.items(): rows[index]=future.result()
+                current=widget_job.result()
+        else:
+            current=safe_widgets(settings,widget_cache,force_widgets)
         snapshot=dict(version=__version__,settings=settings,providers=rows,widgets=current,generatedAt=time.time())
         with Lock(root/'settings.lock'):
             atomic_json(root/'usage.json',snapshot)

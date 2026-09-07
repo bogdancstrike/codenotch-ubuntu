@@ -1,14 +1,13 @@
-"""Read-only Linux adapters for upstream's provider endpoints."""
+"""Read-only Linux adapters for upstream's provider endpoints.
+
+Import cost matters here: the worker is spawned every few seconds and usually
+has nothing due. urllib/ssl/sqlite3/dataclasses together cost more CPU than the
+rest of a no-op run, so they are imported only on the paths that need them.
+"""
 import json
 import os
-import sqlite3
-import ssl
 import time
-import urllib.error
 import urllib.parse
-import urllib.request
-from dataclasses import dataclass
-from email.utils import parsedate_to_datetime
 from pathlib import Path
 from .model import ProviderError, PARSERS, timestamp
 
@@ -25,6 +24,7 @@ def read_json(path):
 
 def sqlite_rows(path, sql, args=()):
     if not Path(path).is_file(): return []
+    import sqlite3
     try:
         # Do NOT use immutable=1: it would ignore a running editor's WAL.
         with sqlite3.connect(Path(path).absolute().as_uri()+'?mode=ro', uri=True, timeout=0.2) as db:
@@ -50,12 +50,25 @@ def check_expiry(value):
     if expiry and expiry<=time.time():
         raise ProviderError('expired','Saved login expired. Open the owning tool to refresh it.')
 
-class NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        # Never forward a borrowed credential to a redirect destination.
-        raise ProviderError('error','The usage endpoint redirected. Update Codenotch to check the new endpoint.')
+_redirect_handler=None
+def no_redirect():
+    """Built on first use so importing this module does not pull in urllib."""
+    global _redirect_handler
+    if _redirect_handler is None:
+        import urllib.request
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, headers, newurl):
+                # Never forward a borrowed credential to a redirect destination.
+                raise ProviderError('error','The usage endpoint redirected. Update Codenotch to check the new endpoint.')
+        _redirect_handler=NoRedirect
+    return _redirect_handler
+
+def __getattr__(name):
+    if name=='NoRedirect': return no_redirect()
+    raise AttributeError(name)
 
 def request_json(url, headers, body=None, local=False):
+    import ssl, urllib.error, urllib.request
     parsed=urllib.parse.urlparse(url)
     if parsed.scheme!='https': raise ProviderError('error','HTTPS is required.')
     context=ssl.create_default_context()
@@ -63,7 +76,7 @@ def request_json(url, headers, body=None, local=False):
         if parsed.hostname!='127.0.0.1': raise ProviderError('error','Local bridge must use loopback.')
         # Only the discovered, current user's LS port uses a self-signed certificate.
         context.check_hostname=False; context.verify_mode=ssl.CERT_NONE
-    handlers=[NoRedirect(),urllib.request.HTTPSHandler(context=context)]
+    handlers=[no_redirect()(),urllib.request.HTTPSHandler(context=context)]
     if local: handlers.append(urllib.request.ProxyHandler({}))
     opener=urllib.request.build_opener(*handlers)
     req=urllib.request.Request(url,headers={'Accept':'application/json','User-Agent':'Codenotch-Ubuntu/0.2',**headers},data=json.dumps(body).encode() if body is not None else None)
@@ -81,7 +94,9 @@ def request_json(url, headers, body=None, local=False):
             raw=e.headers.get('Retry-After','0')
             try: retry=float(raw)
             except ValueError:
-                try: retry=max(0,parsedate_to_datetime(raw).timestamp()-time.time())
+                try:
+                    from email.utils import parsedate_to_datetime
+                    retry=max(0,parsedate_to_datetime(raw).timestamp()-time.time())
                 except (ValueError,TypeError,OverflowError): retry=0
             raise ProviderError('rateLimited','Provider rate limited requests; waiting before retrying.',retry)
         raise ProviderError('error',f'Usage endpoint returned HTTP {e.code}.')
@@ -90,12 +105,14 @@ def request_json(url, headers, body=None, local=False):
     except (ValueError,TypeError):
         raise ProviderError('error','The usage response format was not recognized.')
 
-@dataclass
 class Provider:
-    id: str
-    name: str
-    kind: str
-    path: Path
+    __slots__=('id','name','kind','path')
+    def __init__(self, id, name, kind, path):
+        self.id, self.name, self.kind, self.path = id, name, kind, path
+    def __repr__(self):
+        return f'Provider({self.id!r}, {self.kind!r})'
+    def __eq__(self, other):
+        return isinstance(other,Provider) and (self.id,self.name,self.kind,self.path)==(other.id,other.name,other.kind,other.path)
     def meta(self):
         return dict(id=self.id,name=self.name,kind=self.kind,glyph={'codex':'openai','gemini':'antigravity'}.get(self.kind,self.kind))
     def fetch(self, home, config, data):
@@ -186,13 +203,14 @@ def detected(provider,home,config,data):
     return provider.path.exists()
 
 def antigravity_signed_in(home,config):
-    """True for the Antigravity IDE or a signed-in `agy` CLI. The CLI keeps its
-    Google login in the session keyring, so its state directory plus a stored
-    credential counts as a sign-in without reading the secret here."""
+    """True for the Antigravity IDE or an installed `agy` CLI.
+
+    Filesystem evidence only. The CLI keeps its Google login in the session
+    keyring, and touching that costs a gi import plus a DBus round trip, so it
+    is left to the quota request that actually needs the token."""
     if (config/'Antigravity').exists(): return True
     cli=home/'.gemini/antigravity-cli'
-    if not cli.is_dir(): return False
-    return bool(keyring_token(peek=True)) or (home/'.gemini/oauth_creds.json').is_file()
+    return cli.is_dir() and any((cli/name).exists() for name in ('cache','settings.json','conversations'))
 
 def keyring_token(peek=False):
     """Read the agy CLI's Google access token from the session keyring.
@@ -236,9 +254,9 @@ def antigravity_quota(home,config):
             if err.status=='forbidden':
                 raise ProviderError('unavailable','Signed in to Antigravity, but Google does not expose this account’s allowance to other apps. Start Antigravity to read the local quota.')
             raise
-    if (home/'.gemini/antigravity-cli').is_dir() or (config/'Antigravity').exists():
-        raise ProviderError('unavailable','Signed in to Antigravity. Start Antigravity or run `agy` to publish its local quota service.')
-    raise ProviderError('unavailable','Open Antigravity to read its local quota service.')
+    if (config/'Antigravity').exists():
+        raise ProviderError('unavailable','Start Antigravity to publish its local quota service.')
+    auth_error()
 
 def bridge_endpoints(proc=Path('/proc')):
     """Only inspect same-UID Antigravity servers; map owned socket inodes to ports."""

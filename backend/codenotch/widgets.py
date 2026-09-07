@@ -96,6 +96,17 @@ def _round(value):
     return None if n is None else round(n)
 
 
+def needs_network(settings, cache, force=False):
+    """True when a widget refresh would make a request. Lets the worker skip its
+    thread pool entirely on the common no-op run."""
+    if 'weather' not in (settings.get('widgets') or []):
+        return False
+    old = cache.get('weather') if isinstance(cache.get('weather'), dict) else {}
+    if force or old.get('key') != _weather_key(settings):
+        return True
+    return time.time() - (old.get('updatedAt') or 0) >= WEATHER_INTERVAL
+
+
 def weather(settings, cache, force=False):
     """Return cached weather, refreshing at most once per WEATHER_INTERVAL."""
     now = time.time()
