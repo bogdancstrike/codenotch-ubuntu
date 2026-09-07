@@ -13,6 +13,7 @@ from pathlib import Path
 from .model import ProviderError, PARSERS, timestamp
 
 MAX_BYTES=4*1024*1024
+CLOUD_QUOTA='https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary'
 
 def read_json(path):
     try:
@@ -74,7 +75,8 @@ def request_json(url, headers, body=None, local=False):
         if not isinstance(data,dict): raise ValueError()
         return data
     except urllib.error.HTTPError as e:
-        if e.code in (401,403): auth_error()
+        if e.code==401: auth_error()
+        if e.code==403: raise ProviderError('forbidden','The provider refused this account for usage reads.')
         if e.code==429:
             raw=e.headers.get('Retry-After','0')
             try: retry=float(raw)
@@ -128,7 +130,7 @@ class Provider:
         elif self.kind=='opencode':
             token=pick_key(read_json(self.path).get('opencode-go')); url='https://opencode.ai/zen/go/v1/usage'
         elif self.kind=='gemini':
-            return local_quota()
+            return antigravity_quota(home,config)
         else: raise ProviderError('error','Unknown provider.')
         if self.kind not in ('cursor','glm') and not token: auth_error()
         if token: headers['Authorization']='Bearer '+token
@@ -153,9 +155,14 @@ def glm_key(home,config,data):
             if key and host in ('api.z.ai','open.bigmodel.cn'): return key,'https://'+host
     return None
 
+def claude_profile(path):
+    """A Claude Code profile owns a login or its own settings; ~/.claude-flow and
+    friends are other tools' data directories and must not become empty rings."""
+    return any((path/name).exists() for name in ('.credentials.json','settings.json','sessions','statsig'))
+
 def discover(home,config,data):
     profiles=[home/'.claude']
-    extra=sorted(p for p in home.glob('.claude-*') if p.is_dir())
+    extra=sorted(p for p in home.glob('.claude-*') if p.is_dir() and claude_profile(p))
     custom=os.environ.get('CLAUDE_CONFIG_DIR')
     if custom and Path(custom).expanduser() not in profiles+extra: extra.append(Path(custom).expanduser())
     profiles+=extra
@@ -164,7 +171,7 @@ def discover(home,config,data):
     out.extend([
         Provider('codex','Codex','codex',codex_path),
         Provider('cursor','Cursor','cursor',config/'Cursor/User/globalStorage/state.vscdb'),
-        Provider('gemini','Antigravity','gemini',config/'Antigravity'),
+        Provider('gemini','Antigravity','gemini',home/'.gemini'),
         Provider('glm','GLM','glm',home),
         Provider('grok','Grok','grok',home/'.grok/auth.json'),
         Provider('opencode','OpenCode','opencode',data/'opencode/auth.json'),
@@ -175,7 +182,63 @@ def detected(provider,home,config,data):
     if provider.kind=='claude': return (provider.path/'.credentials.json').is_file()
     if provider.kind=='codex': return (provider.path/'auth.json').is_file()
     if provider.kind=='glm': return bool(glm_key(home,config,data))
+    if provider.kind=='gemini': return antigravity_signed_in(home,config)
     return provider.path.exists()
+
+def antigravity_signed_in(home,config):
+    """True for the Antigravity IDE or a signed-in `agy` CLI. The CLI keeps its
+    Google login in the session keyring, so its state directory plus a stored
+    credential counts as a sign-in without reading the secret here."""
+    if (config/'Antigravity').exists(): return True
+    cli=home/'.gemini/antigravity-cli'
+    if not cli.is_dir(): return False
+    return bool(keyring_token(peek=True)) or (home/'.gemini/oauth_creds.json').is_file()
+
+def keyring_token(peek=False):
+    """Read the agy CLI's Google access token from the session keyring.
+
+    `peek` only reports whether the item exists, so ordinary polling never pulls
+    the secret out of the keyring. Nothing is written, refreshed, or cached."""
+    try:
+        import gi
+        gi.require_version('Secret','1')
+        from gi.repository import Secret
+    except (ImportError,ValueError): return None
+    attributes={'service':'gemini','username':'antigravity'}
+    flags=Secret.SearchFlags.UNLOCK if peek else Secret.SearchFlags.UNLOCK|Secret.SearchFlags.LOAD_SECRETS
+    try:
+        items=Secret.password_search_sync(None,attributes,flags,None)
+        if not items: return None
+        if peek: return True
+        value=items[0].retrieve_secret_sync(None)
+        entry=json.loads(value.get_text() if value else '{}').get('token') or {}
+        token=secret(entry.get('access_token'))
+        if token and timestamp(entry.get('expiry')) and timestamp(entry.get('expiry'))<=time.time():
+            raise ProviderError('expired','Antigravity’s saved login expired. Run `agy` once to refresh it.')
+        return token
+    except ProviderError: raise
+    except Exception: return None
+
+def antigravity_quota(home,config):
+    """Prefer the running language server; fall back to the CLI's cloud quota."""
+    endpoints=bridge_endpoints()
+    for port,token in endpoints:
+        try:
+            body=request_json(f'https://127.0.0.1:{port}/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary',{'x-codeium-csrf-token':token,'Content-Type':'application/json'},{'forceRefresh':True},True)
+            return PARSERS['gemini'](body,time.time())
+        except ProviderError: pass
+    token=keyring_token()
+    if token:
+        try:
+            body=request_json(CLOUD_QUOTA,{'Authorization':'Bearer '+token,'Content-Type':'application/json'},{})
+            return PARSERS['gemini'](body,time.time())
+        except ProviderError as err:
+            if err.status=='forbidden':
+                raise ProviderError('unavailable','Signed in to Antigravity, but Google does not expose this account’s allowance to other apps. Start Antigravity to read the local quota.')
+            raise
+    if (home/'.gemini/antigravity-cli').is_dir() or (config/'Antigravity').exists():
+        raise ProviderError('unavailable','Signed in to Antigravity. Start Antigravity or run `agy` to publish its local quota service.')
+    raise ProviderError('unavailable','Open Antigravity to read its local quota service.')
 
 def bridge_endpoints(proc=Path('/proc')):
     """Only inspect same-UID Antigravity servers; map owned socket inodes to ports."""
@@ -186,7 +249,8 @@ def bridge_endpoints(proc=Path('/proc')):
             if directory.stat().st_uid!=os.getuid(): continue
             args=(directory/'cmdline').read_bytes().decode(errors='replace').split('\0')
             joined=' '.join(args)
-            if 'language_server' not in joined or 'antigravity' not in joined.lower(): continue
+            lowered=joined.lower()
+            if not (('language_server' in joined and 'antigravity' in lowered) or ('jetski' in lowered and '--csrf_token' in joined)): continue
             token=None
             for i,arg in enumerate(args):
                 if arg=='--csrf_token' and i+1<len(args): token=secret(args[i+1])
@@ -207,11 +271,4 @@ def bridge_endpoints(proc=Path('/proc')):
     return out[:8]
 
 def local_quota():
-    endpoints=bridge_endpoints()
-    if not endpoints: raise ProviderError('unavailable','Open Antigravity to read its local quota service.')
-    for port,token in endpoints:
-        try:
-            body=request_json(f'https://127.0.0.1:{port}/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary',{'x-codeium-csrf-token':token,'Content-Type':'application/json'},{'forceRefresh':True},True)
-            return PARSERS['gemini'](body,time.time())
-        except ProviderError: pass
-    raise ProviderError('unavailable','Antigravity’s local quota service did not return a readable allowance.')
+    return antigravity_quota(Path.home(),Path.home()/'.config')
