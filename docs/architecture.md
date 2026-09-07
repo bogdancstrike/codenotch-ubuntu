@@ -153,3 +153,8 @@ because it never leaves the shell.
 
 **A new provider** needs a `Provider` entry in `discover()`, a branch in `Provider.fetch`,
 a parser in `model.py`, and a glyph. The parser must raise rather than invent a number.
+
+**Trying a change** is `codenotch --update` from anywhere inside the checkout: it
+syntax-checks, compiles, builds the `.deb`, installs it, and says whether the session
+needs a restart. The worker and preferences pick up changes immediately; on Wayland the
+extension's own code waits for a new session, which is a GNOME constraint, not ours.

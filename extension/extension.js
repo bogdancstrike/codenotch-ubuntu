@@ -35,6 +35,8 @@ export default class Codenotch extends Extension {
         this._alive=true;this._sources=new Set();this._signals=[];this._jobs=new Set();this._queued=[];
         this._snapshot=null;this._providers=[];this._widgets=[];this._widgetData={};
         this._expanded=false;this._progress=0;this._velocity=0;this._target=0;this._hover=null;this._menuRows=new Map();
+        // Safe defaults so a repaint before the first layout cannot throw.
+        this._scale=1;this._folded=true;this._cardBudget=400;
         this._settings={...DEFAULTS};
         setTextEngine(pangoEngine);
 

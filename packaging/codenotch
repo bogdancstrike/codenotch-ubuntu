@@ -1,16 +1,90 @@
 #!/bin/sh
 set -eu
+
+UUID=codenotch@ubuntu.local
+WORKER=/usr/lib/codenotch/codenotch-worker
+
+usage() {
+  printf '%s\n' \
+    'Usage: codenotch <command>' \
+    '' \
+    '  settings              Open the preferences window (default)' \
+    '  status                Cached status as JSON; contacts nobody' \
+    '  verify [AI|all]       Ask a provider — or every enabled one — for fresh usage' \
+    '  weather               Force a widget refresh (weather, system load)' \
+    '  search CITY           Look up weather locations by name' \
+    '  set KEY JSON          Change one setting, e.g. set pollSeconds 300' \
+    '  demo [true|false]     Sample data; no credentials, no network' \
+    '  enable | disable      Turn the GNOME extension on or off' \
+    '  --update [DIR]        Rebuild and reinstall from a source checkout' >&2
+}
+
+# Walk up from a directory until the Codenotch sources appear.
+find_root() {
+  candidate=$(cd -- "${1:-$PWD}" 2>/dev/null && pwd -P) || return 1
+  while [ -n "$candidate" ]; do
+    if [ -x "$candidate/scripts/build-deb.sh" ] && [ -f "$candidate/extension/metadata.json" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+    [ "$candidate" = / ] && return 1
+    candidate=$(dirname -- "$candidate")
+  done
+  return 1
+}
+
+as_root() {
+  if [ "$(id -u)" = 0 ]; then "$@"
+  elif command -v pkexec >/dev/null 2>&1; then pkexec "$@"
+  elif command -v sudo >/dev/null 2>&1; then sudo "$@"
+  else printf '%s\n' 'Need root to install the package; re-run with sudo.' >&2; return 1
+  fi
+}
+
+update() {
+  root=$(find_root "${1:-$PWD}") || {
+    printf '%s\n' 'No Codenotch checkout here. Run this from the source directory,' \
+                  'or pass its path: codenotch --update ~/src/codenotch-ubuntu' >&2
+    exit 2
+  }
+  printf 'Codenotch source: %s\n' "$root"
+
+  if command -v node >/dev/null 2>&1; then
+    for file in extension/extension.js extension/prefs.js extension/render.js; do
+      node --check "$root/$file" >/dev/null || { printf '%s failed its syntax check.\n' "$file" >&2; exit 1; }
+    done
+  fi
+  python3 -m compileall -q "$root/backend" >/dev/null || { printf 'Worker failed to compile.\n' >&2; exit 1; }
+
+  "$root/scripts/build-deb.sh"
+  deb=$(ls -1t "$root"/dist/codenotch_*_all.deb 2>/dev/null | head -n 1)
+  [ -n "$deb" ] || { printf 'No .deb was produced in %s/dist.\n' "$root" >&2; exit 1; }
+
+  printf 'Installing %s\n' "$deb"
+  as_root /usr/bin/dpkg -i "$deb"
+
+  gnome-extensions enable "$UUID" 2>/dev/null || true
+  if [ "${XDG_SESSION_TYPE:-}" = x11 ]; then
+    printf '%s\n' 'Installed. Press Alt+F2, type r, and press Enter to reload GNOME Shell.'
+  else
+    printf '%s\n' 'Installed. Log out and back in to load the new extension code (Wayland cannot reload it in place).'
+  fi
+  printf '%s\n' 'The worker and the settings window are already up to date.'
+}
+
 case "${1:-settings}" in
-  enable) exec gnome-extensions enable codenotch@ubuntu.local ;;
-  disable) exec gnome-extensions disable codenotch@ubuntu.local ;;
-  settings) exec gnome-extensions prefs codenotch@ubuntu.local ;;
-  status) exec /usr/lib/codenotch/codenotch-worker --info ;;
-  verify) exec /usr/lib/codenotch/codenotch-worker --verify "${2:-all}" ;;
-  demo) exec /usr/lib/codenotch/codenotch-worker --set demo "${2:-true}" ;;
-  weather) exec /usr/lib/codenotch/codenotch-worker --snapshot --widgets ;;
-  search) [ $# -ge 2 ] || { printf '%s\n' 'Usage: codenotch search CITY' >&2; exit 2; }
-          exec /usr/lib/codenotch/codenotch-worker --search "$2" ;;
-  set) [ $# -ge 3 ] || { printf '%s\n' 'Usage: codenotch set KEY JSON' >&2; exit 2; }
-       exec /usr/lib/codenotch/codenotch-worker --set "$2" "$3" ;;
-  *) printf '%s\n' 'Usage: codenotch {enable|disable|settings|status|verify [AI|all]|demo [true|false]|weather|search CITY|set KEY JSON}' >&2; exit 2 ;;
+  enable) exec gnome-extensions enable "$UUID" ;;
+  disable) exec gnome-extensions disable "$UUID" ;;
+  settings) exec gnome-extensions prefs "$UUID" ;;
+  status) exec "$WORKER" --info ;;
+  verify) exec "$WORKER" --verify "${2:-all}" ;;
+  demo) exec "$WORKER" --set demo "${2:-true}" ;;
+  weather) exec "$WORKER" --snapshot --widgets ;;
+  search) [ $# -ge 2 ] || { printf 'Usage: codenotch search CITY\n' >&2; exit 2; }
+          exec "$WORKER" --search "$2" ;;
+  set) [ $# -ge 3 ] || { printf 'Usage: codenotch set KEY JSON\n' >&2; exit 2; }
+       exec "$WORKER" --set "$2" "$3" ;;
+  --update|update) update "${2:-$PWD}" ;;
+  -h|--help|help) usage ;;
+  *) usage; exit 2 ;;
 esac

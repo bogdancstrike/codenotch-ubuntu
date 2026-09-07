@@ -205,7 +205,22 @@ codenotch set pollSeconds 300    # any setting, as JSON
 codenotch demo true              # sample data, no credentials, no network
 codenotch settings               # open preferences
 codenotch disable / enable
+codenotch --update               # rebuild and reinstall from this checkout
 ```
+
+### Updating from source
+
+From anywhere inside the source directory:
+
+```bash
+codenotch --update            # or: codenotch --update ~/src/codenotch-ubuntu
+```
+
+It finds the checkout by walking up from the current directory, syntax-checks the
+extension and compiles the worker, builds the `.deb`, installs it (via `pkexec` or
+`sudo`), re-enables the extension, and tells you whether you need to log out or can
+reload the shell in place. The worker and the settings window are live immediately;
+only the extension's own code waits for a new session on Wayland.
 
 Output is JSON containing usage and status, never tokens. Per-profile Claude IDs appear as
 `claude:.claude-work`.
@@ -256,7 +271,8 @@ Diagnostics JSON can contain local project names in session rows; review before 
 ## Upgrade or uninstall
 
 ```bash
-sudo apt install ./dist/codenotch_0.2.0_all.deb   # then log out and back in
+codenotch --update                                # from a source checkout
+sudo apt install ./dist/codenotch_0.2.0_all.deb   # or install a built package
 codenotch disable && sudo apt remove codenotch
 rm -rf ~/.config/codenotch ~/.cache/codenotch     # optional: erase local state
 ```
