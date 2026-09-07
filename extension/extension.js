@@ -16,7 +16,7 @@ const DEFAULTS={edge:'right',visibility:'hover',scale:1,monitor:-1,panelIcon:tru
     peek:true,widgets:[],clock24:true,clockSeconds:false,dateStyle:'medium',textContrast:'high',demo:false};
 
 // Pango gives real hinting and metrics; cairo's toy text API does not.
-function pangoEngine(cr,value,x,y,size,hex,align,weight,opts) {
+function pangoLayout(cr,value,size,weight,opts={}) {
     const layout=PangoCairo.create_layout(cr);
     const description=Pango.FontDescription.from_string('Sans');
     description.set_absolute_size(size*Pango.SCALE);
@@ -24,10 +24,17 @@ function pangoEngine(cr,value,x,y,size,hex,align,weight,opts) {
     layout.set_font_description(description);
     if(opts.tracking){const list=Pango.AttrList.new();list.insert(Pango.attr_letter_spacing_new(Math.round(opts.tracking*Pango.SCALE)));layout.set_attributes(list);}
     layout.set_text(value,-1);
+    return layout;
+}
+function pangoEngine(cr,value,x,y,size,hex,align,weight,opts) {
+    const layout=pangoLayout(cr,value,size,weight,opts);
     const [width]=layout.get_pixel_size();
     cr.moveTo(x-(align==='center'?width/2:align==='right'?width:0),y-layout.get_baseline()/Pango.SCALE);
     color(cr,hex,opts.alpha??1);
     PangoCairo.show_layout(cr,layout);
+}
+function pangoMeasure(cr,value,size,weight) {
+    return pangoLayout(cr,value,size,weight).get_pixel_size()[0];
 }
 
 export default class Codenotch extends Extension {
@@ -38,7 +45,7 @@ export default class Codenotch extends Extension {
         // Safe defaults so a repaint before the first layout cannot throw.
         this._scale=1;this._folded=true;this._cardBudget=400;
         this._settings={...DEFAULTS};
-        setTextEngine(pangoEngine);
+        setTextEngine(pangoEngine,pangoMeasure);
 
         this._notch=new St.DrawingArea({reactive:false,can_focus:true,track_hover:true,
             accessible_name:'Codenotch — AI usage and widgets. Press Enter for settings.'});

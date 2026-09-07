@@ -11,7 +11,7 @@ const here=GLib.path_get_dirname(import.meta.url.replace('file://',''));
 const R=await import(`file://${here}/../extension/render.js`);
 const {D,W,P,plan,drawNotch,drawCard,drawWidgetCard,widgetCard,text,color,setTextEngine,roundRect}=R;
 
-setTextEngine((cr,value,x,y,size,hex,align,weight,opts)=>{
+function pangoLayout(cr,value,size,weight,opts={}) {
     const layout=PangoCairo.create_layout(cr);
     const description=Pango.FontDescription.from_string('Sans');
     description.set_absolute_size(size*Pango.SCALE);
@@ -19,11 +19,19 @@ setTextEngine((cr,value,x,y,size,hex,align,weight,opts)=>{
     layout.set_font_description(description);
     if(opts.tracking){const list=Pango.AttrList.new();list.insert(Pango.attr_letter_spacing_new(Math.round(opts.tracking*Pango.SCALE)));layout.set_attributes(list);}
     layout.set_text(value,-1);
+    return layout;
+}
+function pangoEngine(cr,value,x,y,size,hex,align,weight,opts) {
+    const layout=pangoLayout(cr,value,size,weight,opts);
     const [width]=layout.get_pixel_size();
     cr.moveTo(x-(align==='center'?width/2:align==='right'?width:0),y-layout.get_baseline()/Pango.SCALE);
     color(cr,hex,opts.alpha??1);
     PangoCairo.show_layout(cr,layout);
-});
+}
+function pangoMeasure(cr,value,size,weight) {
+    return pangoLayout(cr,value,size,weight).get_pixel_size()[0];
+}
+setTextEngine(pangoEngine,pangoMeasure);
 
 const now=new Date(2026,8,7,14,5,0);
 const providers=[

@@ -8,7 +8,7 @@ export const D={
     gap:26.9*PX,line:19,padStart:69.5*PX,padEnd:50.1*PX,spacing:83.5*PX,
     widgetSpacing:19,groupGap:26,dividerGap:15,gearCell:34,gear:15,
     peekDepth:26*PX,peekLength:210*PX,handle:3,handleLength:34,
-    cardWidth:272,cardPad:20,cardCorner:22,tail:75*PX,tailHeight:87*PX,tailGap:10,
+    cardWidth:306,cardPad:22,cardCorner:24,cardGlyph:22,tail:75*PX,tailHeight:87*PX,tailGap:10,
 };
 // Weight names map onto Pango weights; the cairo fallback only knows bold or not.
 export const W={regular:400,medium:500,semi:600,bold:700};
@@ -32,11 +32,33 @@ function cairoText(cr,value,x,y,size,hex,align,weight,opts) {
     const ex=cr.textExtents(value),width=ex.width??ex.x_advance??0;
     cr.moveTo(x-(align==='center'?width/2:align==='right'?width:0),y);cr.showText(value);
 }
-let engine=cairoText;
+function cairoMeasure(cr,value,size,weight) {
+    cr.selectFontFace('sans-serif',0,weight>=W.semi?1:0);cr.setFontSize(size);
+    const ex=cr.textExtents(value);return ex.width??ex.x_advance??0;
+}
+let engine=cairoText,measure=cairoMeasure;
 // GNOME swaps in a Pango engine: real hinting and metrics, far crisper small text.
-export function setTextEngine(fn) {engine=fn??cairoText;}
+export function setTextEngine(fn,measureFn) {engine=fn??cairoText;measure=measureFn??cairoMeasure;}
 export function text(cr,value,x,y,size=12,hex=P.white,align='left',weight=W.regular,opts={}) {
     engine(cr,String(value),x,y,size,hex,align,weight,opts);
+}
+export function textWidth(cr,value,size,weight=W.regular) {return measure(cr,String(value),size,weight);}
+/** Trim to a pixel budget. Paths lose their head, everything else its tail. */
+export function fit(cr,value,size,weight,maxWidth,fromStart=false) {
+    const full=String(value??'');
+    if(!full||textWidth(cr,full,size,weight)<=maxWidth)return full;
+    let low=0,high=full.length;
+    while(low<high){
+        const mid=Math.ceil((low+high)/2);
+        const candidate=fromStart?'…'+full.slice(full.length-mid):full.slice(0,mid)+'…';
+        if(textWidth(cr,candidate,size,weight)<=maxWidth)low=mid;else high=mid-1;
+    }
+    if(!fromStart)return full.slice(0,low)+'…';
+    // Start the visible tail at a path separator: "…/dev/project" beats "…v/project".
+    let tail=full.slice(full.length-low);
+    const cut=tail.indexOf('/');
+    if(cut>0&&cut<=8)tail=tail.slice(cut);
+    return '…'+tail;
 }
 
 export function roundRect(cr,x,y,w,h,r) {
@@ -83,7 +105,7 @@ export function stagger(progress,index,count,share=.42) {
 }
 
 // ---------------------------------------------------------------- geometry
-export const WIDGET_EXTENT={clock:[30,64],date:[40,66],weather:[50,64],battery:[34,54],system:[46,58]};
+export const WIDGET_EXTENT={clock:[30,64],date:[40,66],weather:[50,64],battery:[34,54],system:[54,62]};
 function widgetExtent(kind,vertical) {return (WIDGET_EXTENT[kind]??WIDGET_EXTENT.clock)[vertical?0:1];}
 
 /** Ordered cells for the notch: providers, then widgets, then the settings gear. */
@@ -231,14 +253,16 @@ export function drawWidget(cr,kind,data,settings,g,edge,cell,alpha,now=new Date(
         return;
     }
     if(kind==='system'){
+        // A bar alone is hard to read at this size, so each meter carries its
+        // number: label left, value right, the bar underneath both.
         const s=data??{};
-        const rows=[['CPU',s.cpu,P.green],['RAM',s.mem,'#5AC8FA']];
-        rows.forEach(([label,value,hex],i)=>{
-            const offset=horizontal?-6+i*15:-half+14+i*20;
-            const [x,y]=horizontal?at(0,-offset):at(offset);
-            const left=x-(horizontal?26:25);
-            text(cr,label,left,y+(horizontal?3:2),10,muted,'left',W.semi,{alpha,tracking:.6});
-            meter(cr,left+24,y+(horizontal?-1:-2),horizontal?28:26,value??0,hex,alpha);
+        const span=horizontal?56:52;
+        [['CPU',s.cpu,P.green],['RAM',s.mem,'#5AC8FA']].forEach(([label,value,hex],i)=>{
+            const [x,y]=horizontal?at(0,-11+i*21):at(-half+15+i*24);
+            const left=x-span/2;
+            text(cr,label,left,y,10,muted,'left',W.semi,{alpha,tracking:.7});
+            text(cr,Number.isFinite(value)?`${Math.round(value*100)}%`:'—',left+span,y,11,dim,'right',W.medium,{alpha});
+            meter(cr,left,y+5,span,value??0,hex,alpha);
         });
         return;
     }
@@ -312,38 +336,56 @@ export function resetCopy(at,now=Date.now()/1000) {
     return `Resets ${new Date(at*1000).toLocaleDateString(undefined,{weekday:'short',hour:'2-digit',minute:'2-digit'})}`;
 }
 export function clipped(s,max=36){s=String(s??'');return s.length>max?s.slice(0,max-1)+'…':s;}
-function wrap(s,width=40){const words=String(s).split(/\s+/);const lines=[];let line='';for(const word of words){if((line+' '+word).length>width&&line){lines.push(line);line='';}line+=(line?' ':'')+word;}if(line)lines.push(line);return lines.slice(0,5);}
+function wrap(s,width=34){const words=String(s).split(/\s+/);const lines=[];let line='';for(const word of words){if((line+' '+word).length>width&&line){lines.push(line);line='';}line+=(line?' ':'')+word;}if(line)lines.push(line);return lines.slice(0,5);}
+
+// Card metrics. Bumped for legibility: nothing here is below 11.5px, and the
+// muted tones come from the contrast setting rather than a fixed grey.
+const C={header:D.cardGlyph+18,note:18,window:58,rule:20,session:44,more:22,
+    title:16.5,label:14,reset:12,percent:13.5,note_:12.5,name:13.5,state:12,detail:12,bar:6};
 
 export function cardLayout(p,maxHeight=650) {
-    const windows=(p.windows??[]).slice(0,8),notes=['ok'].includes(p.status)?[]:wrap(p.message??'No usage available.');
-    const base=2*D.cardPad+D.glyph+10+notes.length*15+windows.length*52;
-    const cap=Math.max(0,Math.min(12,Math.floor((maxHeight-base-30)/40)));
+    const windows=(p.windows??[]).slice(0,8),notes=['ok'].includes(p.status)?[]:wrap(p.message??'No usage available.',34);
+    const base=2*D.cardPad+C.header+notes.length*C.note+windows.length*C.window;
+    const cap=Math.max(0,Math.min(12,Math.floor((maxHeight-base-C.rule)/C.session)));
     const sessions=(p.sessions??[]).slice(0,cap);
-    return {windows,notes,sessions,height:base+(sessions.length?17+sessions.length*40:0)+((p.sessions?.length??0)>sessions.length?18:0)};
+    const overflow=(p.sessions?.length??0)>sessions.length;
+    return {windows,notes,sessions,overflow,
+        height:base+(sessions.length?C.rule+sessions.length*C.session:0)+(overflow?C.more:0)};
 }
 export function drawCard(cr,p,width=D.cardWidth,maxHeight=650,settings={}) {
-    const l=cardLayout(p,maxHeight),pad=D.cardPad;
+    const l=cardLayout(p,maxHeight),pad=D.cardPad,inner=width-2*pad;
     const muted=tone(settings,'muted'),dim=tone(settings,'dim');
     roundRect(cr,0,0,width,l.height,D.cardCorner);color(cr,P.shell);cr.fill();
     color(cr,P.line,.6);cr.setLineWidth(1);roundRect(cr,.5,.5,width-1,l.height-1,D.cardCorner);cr.stroke();
-    glyph(cr,p.glyph,pad+D.glyph/2,pad+D.glyph/2);
-    text(cr,clipped(p.name+' usage',24),pad+D.glyph+10,pad+13,14.5,P.white,'left',W.semi,{tracking:-.1});
-    let y=pad+D.glyph+12;
-    for(const line of l.notes){text(cr,line,pad,y+10,11,muted,'left',W.regular);y+=15;}
+    glyph(cr,p.glyph,pad+D.cardGlyph/2,pad+D.cardGlyph/2,D.cardGlyph);
+    const titleLeft=pad+D.cardGlyph+11;
+    text(cr,fit(cr,`${p.name} usage`,C.title,W.semi,width-pad-titleLeft),titleLeft,pad+D.cardGlyph/2+6,C.title,P.white,'left',W.semi,{tracking:-.2});
+    let y=pad+C.header;
+    for(const line of l.notes){text(cr,line,pad,y+11,C.note_,muted,'left',W.regular);y+=C.note;}
     for(const w of l.windows){
-        text(cr,clipped(w.label,20),pad,y+10,12.5,dim,'left',W.medium);
-        text(cr,resetCopy(w.resetsAt),width-pad,y+10,10.5,muted,'right',W.regular);y+=19;
-        roundRect(cr,pad,y,width-2*pad,5,2.5);color(cr,P.bar);cr.fill();
-        if(Number.isFinite(w.fraction)&&w.fraction>0){roundRect(cr,pad,y,(width-2*pad)*Math.min(1,w.fraction),5,2.5);color(cr,band(w.fraction));cr.fill();}
-        y+=17;text(cr,`${Math.round(w.fraction*100)}% used`,pad,y,12,P.white,'left',W.semi);y+=16;
+        const reset=resetCopy(w.resetsAt);
+        const resetWidth=reset?textWidth(cr,reset,C.reset,W.regular)+14:0;
+        text(cr,fit(cr,w.label,C.label,W.medium,inner-resetWidth),pad,y+11,C.label,dim,'left',W.medium);
+        if(reset)text(cr,reset,width-pad,y+11,C.reset,muted,'right',W.regular);
+        y+=21;
+        roundRect(cr,pad,y,inner,C.bar,C.bar/2);color(cr,P.bar);cr.fill();
+        if(Number.isFinite(w.fraction)&&w.fraction>0){roundRect(cr,pad,y,inner*Math.min(1,w.fraction),C.bar,C.bar/2);color(cr,band(w.fraction));cr.fill();}
+        y+=C.bar+15;
+        text(cr,Number.isFinite(w.fraction)?`${Math.round(w.fraction*100)}% used`:'No reading',pad,y,C.percent,P.white,'left',W.semi);
+        y+=C.window-21-C.bar-15;
     }
-    if(l.sessions.length){cr.newPath();cr.moveTo(pad,y);cr.lineTo(width-pad,y);color(cr,P.line);cr.setLineWidth(1);cr.stroke();y+=17;}
+    if(l.sessions.length){cr.newPath();cr.moveTo(pad,y+2);cr.lineTo(width-pad,y+2);color(cr,P.line);cr.setLineWidth(1);cr.stroke();y+=C.rule;}
     for(const s of l.sessions){
-        text(cr,clipped(s.name,23),pad,y+9,12,P.white,'left',W.medium);
-        text(cr,s.state==='busy'?'working':s.state,width-pad,y+9,10.5,s.state==='waiting'?P.amber:s.state==='busy'?P.green:muted,'right',W.semi);
-        text(cr,clipped(s.detail,36),pad,y+25,10.5,muted,'left',W.regular);y+=40;
+        const state=s.state==='busy'?'working':s.state;
+        const stateWidth=textWidth(cr,state,C.state,W.semi)+14;
+        text(cr,fit(cr,s.name,C.name,W.medium,inner-stateWidth),pad,y+11,C.name,P.white,'left',W.medium);
+        text(cr,state,width-pad,y+11,C.state,s.state==='waiting'?P.amber:s.state==='busy'?P.green:muted,'right',W.semi);
+        // Paths are far more useful with the head trimmed than the tail.
+        const detail=String(s.detail??'');
+        text(cr,fit(cr,detail,C.detail,W.regular,inner,detail.includes('/')),pad,y+29,C.detail,muted,'left',W.regular);
+        y+=C.session;
     }
-    if((p.sessions?.length??0)>l.sessions.length)text(cr,`and ${p.sessions.length-l.sessions.length} more`,pad,y+9,10.5,muted,'left',W.regular);
+    if(l.overflow)text(cr,`and ${p.sessions.length-l.sessions.length} more`,pad,y+11,C.detail,muted,'left',W.regular);
     return l;
 }
 
@@ -390,20 +432,23 @@ export function widgetCard(kind,data,settings={},now=new Date()) {
     return {title:kind,headline:'',rows};
 }
 export function widgetCardLayout(card) {
-    return {height:2*D.cardPad+(card.headline?46:22)+card.rows.length*22};
+    return {height:2*D.cardPad+22+(card.headline?32:0)+card.rows.length*26};
 }
 export function drawWidgetCard(cr,card,width=D.cardWidth,settings={}) {
-    const l=widgetCardLayout(card),pad=D.cardPad;
+    const l=widgetCardLayout(card),pad=D.cardPad,inner=width-2*pad;
     const muted=tone(settings,'muted'),dim=tone(settings,'dim');
     roundRect(cr,0,0,width,l.height,D.cardCorner);color(cr,P.shell);cr.fill();
     color(cr,P.line,.6);cr.setLineWidth(1);roundRect(cr,.5,.5,width-1,l.height-1,D.cardCorner);cr.stroke();
+    const badge=card.symbol?32:0;
     let y=pad+11;
-    if(card.symbol)weatherSymbol(cr,card.symbol,width-pad-13,pad+12,24,1);
-    text(cr,clipped(card.title,22).toUpperCase(),pad,y,10,muted,'left',W.semi,{tracking:1});y+=20;
-    if(card.headline){text(cr,clipped(card.headline,24),pad,y+4,19,P.white,'left',W.semi,{tracking:-.3});y+=26;}
+    if(card.symbol)weatherSymbol(cr,card.symbol,width-pad-13,pad+13,26,1);
+    text(cr,fit(cr,String(card.title).toUpperCase(),11.5,W.semi,inner-badge),pad,y,11.5,muted,'left',W.semi,{tracking:1.1});
+    y+=22;
+    if(card.headline){text(cr,fit(cr,card.headline,21,W.semi,inner-badge),pad,y+6,21,P.white,'left',W.semi,{tracking:-.3});y+=32;}
     for(const [label,value] of card.rows){
-        text(cr,label,pad,y+10,11.5,muted,'left',W.regular);
-        text(cr,clipped(value,26),width-pad,y+10,11.5,dim,'right',W.medium);y+=22;
+        const labelWidth=textWidth(cr,label,13,W.regular)+16;
+        text(cr,label,pad,y+12,13,muted,'left',W.regular);
+        text(cr,fit(cr,value,13,W.medium,inner-labelWidth),width-pad,y+12,13,dim,'right',W.medium);y+=26;
     }
     return l;
 }

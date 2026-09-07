@@ -7,6 +7,12 @@ from pathlib import Path
 from .providers import read_json, sqlite_rows
 from .model import timestamp
 
+def home_short(text):
+    """~/project reads better than /home/name/project in a narrow card."""
+    home=str(Path.home())
+    text=str(text or '')
+    return '~'+text[len(home):] if home and text.startswith(home) else text
+
 def sessions(provider):
     now=time.time(); out=[]
     if provider.kind=='claude':
@@ -20,7 +26,7 @@ def sessions(provider):
                 if b'claude' not in cmd: continue
             except OSError: continue
             state='waiting' if row.get('tempo')=='blocked' or row.get('status')=='waiting' else 'busy' if row.get('tempo')=='active' or row.get('status')=='busy' else 'idle'
-            out.append(dict(name=str(row.get('name') or Path(cwd).name),detail=str(row.get('waitingFor') or row.get('needs') or cwd),state=state,since=timestamp(row.get('statusUpdatedAt') or row.get('updatedAt')) or now,derived=False))
+            out.append(dict(name=str(row.get('name') or Path(cwd).name),detail=home_short(row.get('waitingFor') or row.get('needs') or cwd),state=state,since=timestamp(row.get('statusUpdatedAt') or row.get('updatedAt')) or now,derived=False))
     elif provider.kind=='codex':
         paths=sqlite_rows(provider.path/'state_5.sqlite','SELECT rollout_path FROM threads WHERE archived = 0 ORDER BY updated_at_ms DESC LIMIT 8')
         for (path,) in paths:
