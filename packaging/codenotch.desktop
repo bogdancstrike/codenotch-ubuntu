@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Codenotch Settings
+Comment=Configure AI usage rings, verify connections, and choose a screen edge
+Exec=codenotch settings
+Icon=codenotch
+Terminal=false
+Categories=Utility;Settings;
+Keywords=AI;Claude;Codex;Cursor;usage;notch;
+OnlyShowIn=GNOME;

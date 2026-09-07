@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+case "${1:-settings}" in
+  enable) exec gnome-extensions enable codenotch@ubuntu.local ;;
+  disable) exec gnome-extensions disable codenotch@ubuntu.local ;;
+  settings) exec gnome-extensions prefs codenotch@ubuntu.local ;;
+  status) exec /usr/lib/codenotch/codenotch-worker --info ;;
+  verify) exec /usr/lib/codenotch/codenotch-worker --verify "${2:-all}" ;;
+  demo) exec /usr/lib/codenotch/codenotch-worker --set demo "${2:-true}" ;;
+  *) printf '%s\n' 'Usage: codenotch {enable|disable|settings|status|verify [AI|all]|demo [true|false]}' >&2; exit 2 ;;
+esac

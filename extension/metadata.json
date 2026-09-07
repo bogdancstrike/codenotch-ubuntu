@@ -1,0 +1,8 @@
+{
+  "uuid": "codenotch@ubuntu.local",
+  "name": "Codenotch for Ubuntu",
+  "description": "AI usage rings at a screen edge. Ubuntu port of vinzdg/codenotch with provider verification and settings menu.",
+  "shell-version": ["46", "47", "48", "49", "50"],
+  "version-name": "0.1.0",
+  "session-modes": ["user"]
+}

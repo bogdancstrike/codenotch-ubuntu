@@ -1,0 +1,5 @@
+.codenotch-menu { min-width: 365px; }
+.codenotch-menu .popup-menu-content { background-color: #101010; color: #ffffff; border: 1px solid #303030; border-radius: 18px; padding: 10px; }
+.codenotch-menu .popup-menu-item { border-radius: 8px; }
+.codenotch-menu .popup-menu-item:focus, .codenotch-menu .popup-menu-item:hover { background-color: #282828; }
+.codenotch-menu .popup-sub-menu { background-color: #181818; border-radius: 10px; }
