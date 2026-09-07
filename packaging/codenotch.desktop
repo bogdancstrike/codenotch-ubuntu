@@ -1,10 +1,10 @@
 [Desktop Entry]
 Type=Application
 Name=Codenotch Settings
-Comment=Configure AI usage rings, verify connections, and choose a screen edge
+Comment=Configure AI usage rings, notch widgets, weather, and appearance
 Exec=codenotch settings
 Icon=codenotch
 Terminal=false
 Categories=Utility;Settings;
-Keywords=AI;Claude;Codex;Cursor;usage;notch;
+Keywords=AI;Claude;Codex;Cursor;usage;notch;clock;weather;widgets;
 OnlyShowIn=GNOME;

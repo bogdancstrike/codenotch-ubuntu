@@ -42,7 +42,7 @@ export default class CodenotchPreferences extends ExtensionPreferences {
         this._about=new Adw.PreferencesGroup({title:'About'});appearance.add(this._about);
 
         window.connect('close-request',()=>{this._alive=false;this._process?.force_exit();return false;});
-        this._run(['--info'],data=>this._build(data));
+        this._run(['--info'],data=>{if(data)this._build(data);});
     }
 
     _run(args,done=null) {
@@ -60,12 +60,21 @@ export default class CodenotchPreferences extends ExtensionPreferences {
                     const data=JSON.parse(out);
                     if(!ok||!proc.get_successful()||data.error)throw Error('worker');
                     if(done)done(data);else this._update(data);
-                }catch(e){this._error.set_title('Could not read settings or verify usage. Try again.');}
+                }catch(e){
+                    this._error.set_title('Could not read settings or verify usage. Try again.');
+                    if(done)done(null);
+                }
             }
             if(this._queue.length){const [a,cb]=this._queue.shift();this._run(a,cb);}
         });
     }
-    _set(key,value){this._run(['--set',key,JSON.stringify(value)]);}
+    // Writes are counted so a reply from an earlier write cannot roll the
+    // switches back over a change the user has already made.
+    _set(key,value){this._write(['--set',key,JSON.stringify(value)]);}
+    _write(args){
+        this._writes=(this._writes??0)+1;
+        this._run(args,data=>{this._writes=Math.max(0,this._writes-1);if(data)this._update(data);});
+    }
 
     _toggle(group,title,subtitle,state,change) {
         const row=new Adw.ActionRow({title,subtitle});
@@ -114,7 +123,7 @@ export default class CodenotchPreferences extends ExtensionPreferences {
         // ------------------------------------------------------------ widgets
         this._widgetSwitches=new Map();
         for(const [id,title,subtitle] of WIDGETS){
-            const toggle=this._toggle(this._widgetGroup,title,subtitle,(s.widgets??[]).includes(id),v=>this._setWidget(id,v));
+            const toggle=this._toggle(this._widgetGroup,title,subtitle,(s.widgets??[]).includes(id),()=>this._setWidget());
             this._widgetSwitches.set(id,toggle);
         }
         this._combo(this._clockGroup,'Clock format','',['24-hour','12-hour'],[true,false],s.clock24,v=>this._set('clock24',v));
@@ -148,19 +157,27 @@ export default class CodenotchPreferences extends ExtensionPreferences {
             ['Standard','High (recommended)','Highest'],['normal','high','higher'],s.textContrast,v=>this._set('textContrast',v));
 
         const about=new Adw.ActionRow({title:`Codenotch for Ubuntu ${data.version??''}`.trim(),
-            subtitle:'Original design and artwork © 2026 Vinz · MIT license\nUbuntu adaptation. Updates are installed through a new .deb package.'});
+            subtitle:'Original design and artwork © 2026 Vinz · MIT license\nUbuntu adaptation. Your settings are kept in ~/.config and survive updates.'});
         this._about.add(about);
+        const author=new Adw.ActionRow({title:'Made by Bogdan Doncea',subtitle:'Ubuntu GNOME port and its widgets, animation, and settings.'});
+        this._about.add(author);
+        const repo=new Adw.ActionRow({title:'Project repository',subtitle:'https://github.com/bogdancstrike/codenotch-ubuntu'});
+        repo.add_suffix(new Gtk.LinkButton({uri:'https://github.com/bogdancstrike/codenotch-ubuntu',label:'Open',valign:Gtk.Align.CENTER}));
+        this._about.add(repo);
+        const source=new Adw.ActionRow({title:'Update from a checkout',
+            subtitle:'Run codenotch --update from the source directory to rebuild and reinstall.'});
+        this._about.add(source);
         const login=new Adw.ActionRow({title:'Launch at login',
             subtitle:'GNOME restores enabled extensions when you sign in. Disable Codenotch in the Extensions app to stop it.'});
         this._about.add(login);
         this._update(data);
     }
 
-    _setWidget(id,enabled) {
-        const chosen=new Set(this._settings.widgets??[]);
-        enabled?chosen.add(id):chosen.delete(id);
-        this._settings.widgets=WIDGETS.map(([key])=>key).filter(key=>chosen.has(key));
-        this._set('widgets',this._settings.widgets);
+    /** The switches are the truth; never rebuild the list from a cached copy. */
+    _setWidget() {
+        const chosen=WIDGETS.map(([key])=>key).filter(key=>this._widgetSwitches.get(key)?.active);
+        this._settings.widgets=chosen;
+        this._set('widgets',chosen);
     }
 
     _search(query) {
@@ -169,7 +186,7 @@ export default class CodenotchPreferences extends ExtensionPreferences {
         const pending=new Adw.ActionRow({title:'Searching…'});this._resultGroup.add(pending);this._results.push(pending);
         this._run(['--search',query.trim()],data=>{
             this._clearResults();
-            const rows=data.results??[];
+            const rows=data?.results??[];
             if(!rows.length){
                 const empty=new Adw.ActionRow({title:'No matching place',subtitle:'Try a larger nearby city.'});
                 this._resultGroup.add(empty);this._results.push(empty);return;
@@ -181,11 +198,9 @@ export default class CodenotchPreferences extends ExtensionPreferences {
                 const choose=()=>{
                     this._current.set_subtitle(place.label);
                     this._settings.weatherPlace=place.label;
-                    this._set('weatherPlace',place.label);
-                    this._set('weatherLat',place.latitude);
-                    this._set('weatherLon',place.longitude);
-                    if(!(this._settings.widgets??[]).includes('weather')){
-                        this._widgetSwitches.get('weather')?.set_active(true);
+                    this._write(['--location',JSON.stringify(place)]);
+                    if(!this._widgetSwitches.get('weather')?.active){
+                        this._widgetSwitches.get('weather')?.set_active(true);   // writes the list itself
                     }
                     this._clearResults();
                 };
@@ -210,7 +225,7 @@ export default class CodenotchPreferences extends ExtensionPreferences {
             r.checked.set_subtitle(p.updatedAt?new Date(p.updatedAt*1000).toLocaleString():'Never');
             r.button.set_sensitive(p.enabled);
         }
-        if(data.settings){
+        if(data.settings&&!this._writes){
             this._settings=data.settings;
             this._current?.set_subtitle(data.settings.weatherPlace||'Not set — search above');
             for(const [id,toggle] of this._widgetSwitches??[])toggle.active=(data.settings.widgets??[]).includes(id);

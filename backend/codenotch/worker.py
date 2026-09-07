@@ -105,7 +105,9 @@ def configuration(config):
     for key in ('weatherLat','weatherLon'):
         value=out[key]
         out[key]=float(value) if isinstance(value,(int,float)) and not isinstance(value,bool) else None
-    if out['weatherLat'] is None or out['weatherLon'] is None: out['weatherLat']=out['weatherLon']=None
+    # A place is its name *and* its coordinates; half of one is not a location.
+    if out['weatherLat'] is None or out['weatherLon'] is None:
+        out['weatherLat']=out['weatherLon']=None; out['weatherPlace']=''
     out['weatherPlace']=str(out['weatherPlace'])[:120] if isinstance(out['weatherPlace'],str) else ''
     for key in ('demo','panelIcon','hideFullscreen','peek','clock24','clockSeconds'):
         out[key]=bool(out[key])
@@ -120,7 +122,17 @@ def apply_settings(args,config,root):
         if args.set:
             key,value=args.set
             if key not in DEFAULTS: raise ValueError('Unknown setting')
+            if key in ('weatherPlace','weatherLat','weatherLon'):
+                raise ValueError('Use --location: a place name and its coordinates must be written together')
             settings[key]=json.loads(value); changed=True
+        if getattr(args,'location',None) is not None:
+            # One write, because configuration() drops a half-set location and a
+            # key-at-a-time update could therefore never complete one.
+            place=json.loads(args.location) or {}
+            if not isinstance(place,dict): raise ValueError('Location must be a JSON object')
+            settings['weatherPlace']=str(place.get('label') or place.get('name') or '')[:120]
+            settings['weatherLat']=place.get('latitude'); settings['weatherLon']=place.get('longitude')
+            changed=True
         if args.enable or args.disable:
             disabled=set(settings['disabled'])
             if args.enable: disabled.discard(args.enable)
@@ -249,6 +261,7 @@ def main():
     parser.add_argument('--set',nargs=2,metavar=('KEY','JSON'))
     parser.add_argument('--search',metavar='PLACE',help='Search weather locations by name')
     parser.add_argument('--widgets',action='store_true',help='Force a widget refresh (weather, system)')
+    parser.add_argument('--location',metavar='JSON',help='Set the weather place and its coordinates together; {} clears it')
     group=parser.add_mutually_exclusive_group(); group.add_argument('--enable'); group.add_argument('--disable')
     args=parser.parse_args()
     try: print(json.dumps(collect(args),ensure_ascii=False,allow_nan=False))

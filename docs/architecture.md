@@ -107,6 +107,15 @@ lock, writes, and returns; it never queues behind a provider that is 15 seconds 
 timeout. A snapshot that arrives while another cycle is running returns the cached
 snapshot with `"busy": true` instead of piling up parallel requests.
 
+### Settings that cannot be written one key at a time
+
+`configuration()` validates and clamps on every read, and some settings are only
+meaningful together. The weather location is the case that bites: latitude without
+longitude is not a place, so a half-set pair is discarded. Writing the two keys with
+separate `--set` calls could therefore never complete a location — the second write read
+back the nulls the first one left. `--location` takes the name and both coordinates and
+writes them in one transaction; `--set` refuses those three keys outright.
+
 ### Poll cadence
 
 | What | When | Default |
@@ -115,7 +124,14 @@ snapshot with `"busy": true` instead of piling up parallel requests.
 | Provider usage | Nothing running | every 600 s (`idlePollSeconds`) |
 | Weather | Always | every 900 s |
 | Clock and date | Drawn from the local clock | no worker involvement at all |
-| Local activity scan | Shell asks the worker | 6 s busy · 10–20 s idle · 60 s hidden |
+| Local activity scan | Shell asks the worker | 6 s busy · 15 s open · 30 s folded · 120 s hidden |
+
+A worker run with nothing due costs about **15 ms of CPU and 16 MB of RSS**, because the
+expensive imports are on the paths that need them: `urllib`/`ssl`/`email` only when a
+request is made, `sqlite3` only for Cursor and Codex, `dataclasses` and `tempfile` not at
+all. `local_state()` runs serially and decides what is due; a thread pool is created only
+when something will actually go over the network. At the folded cadence that is 0.05% of
+one core.
 
 The shell's scan interval and the provider request interval are separate on purpose: the
 "working" ring should react in seconds, while a provider should be asked a couple of times

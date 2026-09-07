@@ -13,7 +13,7 @@ from codenotch.providers import Provider, discover, sqlite_rows, request_json, N
 from codenotch.worker import DEFAULTS, Lock, atomic_json, configuration, update_provider, local_state, demo_snapshot, collect
 
 def namespace(**overrides):
-    base=dict(set=None,enable=None,disable=None,demo=False,info=False,verify=None,search=None,widgets=False,snapshot=True)
+    base=dict(set=None,enable=None,disable=None,demo=False,info=False,verify=None,search=None,widgets=False,location=None,snapshot=True)
     return argparse.Namespace(**{**base,**overrides})
 
 class Parsers(unittest.TestCase):
@@ -132,6 +132,26 @@ class State(unittest.TestCase):
             demo=demo_snapshot([self.p],DEFAULTS,self.root/'cache')
         self.assertEqual(demo['providers'][0]['status'],'demo')
 
+    def test_location_is_written_in_one_piece(self):
+        # Writing lat and lon separately could never complete a location: the
+        # validator drops a half-set pair, so the second write read back nulls.
+        from codenotch.worker import apply_settings
+        root=self.root/'cache'/'codenotch'
+        place={'label':'Bucharest, Romania','latitude':44.4323,'longitude':26.1063}
+        out=apply_settings(namespace(location=json.dumps(place)),self.config,root)
+        self.assertEqual((out['weatherPlace'],out['weatherLat'],out['weatherLon']),
+                         ('Bucharest, Romania',44.4323,26.1063))
+        self.assertEqual(configuration(self.config)['weatherLat'],44.4323)   # survives a re-read
+        cleared=apply_settings(namespace(location='{}'),self.config,root)
+        self.assertEqual((cleared['weatherPlace'],cleared['weatherLat'],cleared['weatherLon']),('',None,None))
+    def test_coordinates_cannot_be_set_one_at_a_time(self):
+        from codenotch.worker import apply_settings
+        with self.assertRaises(ValueError):
+            apply_settings(namespace(set=['weatherLat','44.4']),self.config,self.root/'cache'/'codenotch')
+    def test_half_a_location_names_nothing(self):
+        atomic_json(self.config/'codenotch/settings.json',{'weatherPlace':'Bucharest','weatherLat':44.4})
+        out=configuration(self.config)
+        self.assertEqual((out['weatherPlace'],out['weatherLat'],out['weatherLon']),('',None,None))
     def test_new_settings_are_validated(self):
         atomic_json(self.config/'codenotch/settings.json',
                     {'widgets':['clock','nope','clock'],'pollSeconds':2,'weatherLat':'x','weatherLon':4.0,'textContrast':'neon','dateStyle':'huge'})

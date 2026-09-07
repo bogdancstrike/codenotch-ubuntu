@@ -16,4 +16,19 @@ install -m 644 "$PROJECT_DIR/packaging/codenotch.png" "$INSTALL_ROOT/usr/share/i
 install -m 644 "$PROJECT_DIR/LICENSE" "$INSTALL_ROOT/usr/share/doc/codenotch/copyright"
 install -m 644 "$PROJECT_DIR/README.md" "$PROJECT_DIR/docs/PORTING.md" "$PROJECT_DIR/docs/architecture.md" "$INSTALL_ROOT/usr/share/doc/codenotch/"
 find "$INSTALL_ROOT" -type d -exec chmod 755 {} +
-dpkg-deb --root-owner-group --build "$INSTALL_ROOT" "$PROJECT_DIR/dist/codenotch_0.2.0_all.deb"
+DEB="$PROJECT_DIR/dist/codenotch_0.2.0_all.deb"
+dpkg-deb --root-owner-group --build "$INSTALL_ROOT" "$DEB"
+
+# The package must own nothing outside /usr and must ship no maintainer scripts.
+# Settings and cached readings live in ~/.config and ~/.cache, and every update
+# has to leave them exactly where they are.
+OUTSIDE=$(dpkg-deb -c "$DEB" | awk '{print $6}' | grep -v '^\./$' | grep -v '^\./usr/' || true)
+if [ -n "$OUTSIDE" ]; then
+  printf 'Refusing: package would own files outside /usr:\n%s\n' "$OUTSIDE" >&2
+  exit 1
+fi
+SCRIPTS=$(dpkg-deb --ctrl-tarfile "$DEB" | tar -t | grep -Ev '^(\./|\./control)$' || true)
+if [ -n "$SCRIPTS" ]; then
+  printf 'Refusing: package ships maintainer scripts that could touch user data:\n%s\n' "$SCRIPTS" >&2
+  exit 1
+fi

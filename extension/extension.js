@@ -192,32 +192,39 @@ export default class Codenotch extends Extension {
         return Clutter.EVENT_PROPAGATE;
     }
     _cancelFold(){this._removeTimer(this._foldTimer);this._foldTimer=null;}
+    /** Leaving always dismisses the card. Folding the notch is the part that
+     *  "Always show" opts out of — the two were wrongly tied together. */
     _foldLater() {
         if(!this._alive)return;
         this._cancelFold();
         this._foldTimer=this._timeout(280,()=>{
             this._foldTimer=null;
-            if(this._settings.visibility==='always'||this._stillWanted())return false;
-            this._showCard(null);this._animate(false);return false;
+            if(this._stillWanted())return false;
+            this._showCard(null);
+            if(this._settings.visibility!=='always')this._animate(false);
+            return false;
         });
     }
     _stillWanted() {
         if(this._menu?.isOpen)return true;
         return this._notch?.hover||this._anchor?.hover||this._card?.hover||this._hotspot?.hover||this._pointerInside();
     }
-    _pointerInside(margin=2) {
+    /** The tail counts: it bridges the gap between the notch and its card, so
+     *  crossing that gap must not read as "the pointer left". */
+    _pointerInside(margin=6) {
         const [px,py]=global.get_pointer();
         const inside=actor=>actor?.visible&&px>=actor.x-margin&&px<=actor.x+actor.width+margin&&py>=actor.y-margin&&py<=actor.y+actor.height+margin;
-        return inside(this._notch)||inside(this._card)||inside(this._anchor)||inside(this._hotspot);
+        return inside(this._notch)||inside(this._card)||inside(this._tail)||inside(this._anchor)||inside(this._hotspot);
     }
-    /** Fold anything left open when the pointer is demonstrably elsewhere. */
+    /** Dismiss anything left open when the pointer is demonstrably elsewhere.
+     *  Runs in every visibility mode: a stranded card is the failure this
+     *  catches, and "Always show" is the mode most likely to strand one. */
     _guard() {
-        if(!this._alive||this._settings.visibility==='always')return;
-        if(this._progress<=.01&&!this._card.visible)return;
-        if(this._menu?.isOpen||this._pointerInside(6))return;
-        if(this._foldTimer)return;
+        if(!this._alive||!this._notch)return;
+        if(!this._card?.visible&&this._progress<=.01)return;
+        if(this._menu?.isOpen||this._foldTimer||this._pointerInside())return;
         this._showCard(null);
-        if(this._target!==0)this._animate(false);
+        if(this._settings.visibility!=='always'&&this._target!==0)this._animate(false);
     }
 
     // ------------------------------------------------------------- animation

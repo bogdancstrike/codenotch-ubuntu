@@ -17,6 +17,8 @@ widgets, spring animation, and a resting sliver so you always know it is there.
 [![GJS](https://img.shields.io/badge/GJS-Cairo%20%2B%20Pango-F5C211?logo=javascript&logoColor=black)](https://gjs.guide/)
 [![MIT](https://img.shields.io/badge/License-MIT-9AA0A6)](LICENSE)
 
+[**github.com/bogdancstrike/codenotch-ubuntu**](https://github.com/bogdancstrike/codenotch-ubuntu)  ·  made by **Bogdan Doncea**
+
 <img src="docs/preview.png" alt="The notch with usage rings, clock, date and weather, alongside its hover cards" width="720">
 
 </div>
@@ -108,6 +110,11 @@ Weather uses [Open-Meteo](https://open-meteo.com/): no account, no API key, and 
 identifiers are sent — just the coordinates of the place you pick. Search for a city in
 settings and choose it; Celsius/km-h and Fahrenheit/mph are both available. Click the
 weather cell in the notch to refresh it immediately.
+
+A location is a name **and** its coordinates, so it is stored in one write
+(`codenotch location …`, or the search results in settings). Half of one is not a
+location and is discarded on read — there is no state where the settings window names a
+city the notch cannot use.
 
 ## Settings
 
@@ -202,6 +209,7 @@ codenotch verify all             # …or every enabled one
 codenotch weather                # force a widget refresh
 codenotch search "cluj napoca"   # geocode a weather location
 codenotch set pollSeconds 300    # any setting, as JSON
+codenotch location '{"label":"Cluj","latitude":46.77,"longitude":23.6}'
 codenotch demo true              # sample data, no credentials, no network
 codenotch settings               # open preferences
 codenotch disable / enable
@@ -284,7 +292,17 @@ substitutes for SF Pro. macOS hardware-notch integration and Sparkle updates are
 scope. Automated coverage is described in [docs/TEST-REPORT.md](docs/TEST-REPORT.md); the
 desktop acceptance checklist in [docs/PORTING.md](docs/PORTING.md) still applies.
 
+## About
+
+Made by **Bogdan Doncea** — [github.com/bogdancstrike/codenotch-ubuntu](https://github.com/bogdancstrike/codenotch-ubuntu)
+
+Settings and cached readings live in `~/.config/codenotch/` and `~/.cache/codenotch/`, so
+your AI selection, widgets, and weather location survive package updates, reinstalls, and
+`codenotch --update`. Removing the package leaves them in place; delete those two
+directories to erase them.
+
 ## License
 
 MIT. Original artwork, geometry, and source-derived behavior © 2026 Vinz; the original
-[`LICENSE`](LICENSE) is retained. This Ubuntu port is not an official upstream release.
+[`LICENSE`](LICENSE) is retained. The Ubuntu port is by Bogdan Doncea and is not an
+official upstream release.

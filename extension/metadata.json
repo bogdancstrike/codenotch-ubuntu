@@ -12,5 +12,6 @@
   "version-name": "0.2.0",
   "session-modes": [
     "user"
-  ]
+  ],
+  "url": "https://github.com/bogdancstrike/codenotch-ubuntu"
 }

@@ -14,6 +14,7 @@ usage() {
     '  weather               Force a widget refresh (weather, system load)' \
     '  search CITY           Look up weather locations by name' \
     '  set KEY JSON          Change one setting, e.g. set pollSeconds 300' \
+    '  location JSON         Set the weather place and coordinates together' \
     '  demo [true|false]     Sample data; no credentials, no network' \
     '  enable | disable      Turn the GNOME extension on or off' \
     '  --update [DIR]        Rebuild and reinstall from a source checkout' >&2
@@ -94,6 +95,8 @@ case "${1:-settings}" in
           exec "$WORKER" --search "$2" ;;
   set) [ $# -ge 3 ] || { printf 'Usage: codenotch set KEY JSON\n' >&2; exit 2; }
        exec "$WORKER" --set "$2" "$3" ;;
+  location) [ $# -ge 2 ] || { printf '%s\n' 'Usage: codenotch location '"'"'{"label":"Cluj","latitude":46.77,"longitude":23.6}'"'"'' >&2; exit 2; }
+       exec "$WORKER" --snapshot --location "$2" ;;
   --update|update) update "${2:-$PWD}" ;;
   -h|--help|help) usage ;;
   *) usage; exit 2 ;;
