@@ -22,3 +22,9 @@ deb: test check
 
 clean:
 	rm -rf dist backend/codenotch/__pycache__
+
+# Refresh the checksum manifest that ships with a release tarball.
+sums:
+	@find . \( -name .git -o -name .idea -o -name .vscode -o -name dist -o -name build -o -name __pycache__ -o -name node_modules \) -prune -o \
+		-type f ! -name SHA256SUMS -print | sed 's|^\./||' | LC_ALL=C sort | xargs sha256sum > SHA256SUMS
+	@echo "SHA256SUMS: $$(wc -l < SHA256SUMS) files"

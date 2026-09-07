@@ -107,7 +107,7 @@ export default class Codenotch extends Extension {
     }
     _removeTimer(id){if(id&&this._sources.has(id)){GLib.source_remove(id);this._sources.delete(id);}}
     _queueLayout(){
-        if(this._layoutTimer)return;
+        if(!this._alive||this._layoutTimer)return;
         this._layoutTimer=this._timeout(30,()=>{this._layoutTimer=null;this._layout();return false;});
     }
     _closeAll(){this._showCard(null);this._menu?.close(BoxPointer.PopupAnimation.NONE);}
@@ -165,6 +165,7 @@ export default class Codenotch extends Extension {
     }
     _cancelFold(){this._removeTimer(this._foldTimer);this._foldTimer=null;}
     _foldLater() {
+        if(!this._alive)return;
         this._cancelFold();
         this._foldTimer=this._timeout(280,()=>{
             this._foldTimer=null;
@@ -196,6 +197,7 @@ export default class Codenotch extends Extension {
     /** The notch rests as a sliver only when it is closed and settled. */
     _shouldFold(){return this._settings.visibility!=='always'&&this._target!==1&&this._progress<.005;}
     _animate(open) {
+        if(!this._alive)return;
         this._target=open?1:0;
         if(open)this._expanded=true;
         if(!St.Settings.get().enable_animations){
@@ -280,6 +282,7 @@ export default class Codenotch extends Extension {
 
     // ------------------------------------------------------------------ card
     _showCard(hit,force=false) {
+        if(!this._alive||!this._card)return;
         if(!hit||this._progress<.9||this._menu?.isOpen){
             if(this._hover){this._hover=null;this._card?.hide();this._tail?.hide();}
             return;
@@ -446,7 +449,12 @@ export default class Codenotch extends Extension {
             this._panel.add_child(new St.Icon({icon_name:'utilities-system-monitor-symbolic',style_class:'system-status-icon'}));
             Main.panel.addToStatusArea(this.uuid,this._panel);
             const entries=[
-                ['AI connections and settings',()=>{this._settings.visibility=this._settings.visibility==='hidden'?'hover':this._settings.visibility;this._expand();this._menu.open();}],
+                ['AI connections and settings',()=>{
+                    // Reveal a hidden notch for real, not just for this session.
+                    if(this._settings.visibility==='hidden')this._run(['--set','visibility',JSON.stringify('hover')]);
+                    this._settings.visibility='always'===this._settings.visibility?'always':'hover';
+                    this._layout();this._expand();this._menu.open();
+                }],
                 ['Refresh now',()=>this._run(['--verify','all'])],
                 ['Widgets and appearance…',()=>this.openPreferences()],
             ];

@@ -14,6 +14,6 @@ install -m 755 "$PROJECT_DIR/packaging/codenotch" "$INSTALL_ROOT/usr/bin/codenot
 install -m 644 "$PROJECT_DIR/packaging/codenotch.desktop" "$INSTALL_ROOT/usr/share/applications/"
 install -m 644 "$PROJECT_DIR/packaging/codenotch.png" "$INSTALL_ROOT/usr/share/icons/hicolor/256x256/apps/codenotch.png"
 install -m 644 "$PROJECT_DIR/LICENSE" "$INSTALL_ROOT/usr/share/doc/codenotch/copyright"
-install -m 644 "$PROJECT_DIR/README.md" "$PROJECT_DIR/docs/PORTING.md" "$INSTALL_ROOT/usr/share/doc/codenotch/"
+install -m 644 "$PROJECT_DIR/README.md" "$PROJECT_DIR/docs/PORTING.md" "$PROJECT_DIR/docs/architecture.md" "$INSTALL_ROOT/usr/share/doc/codenotch/"
 find "$INSTALL_ROOT" -type d -exec chmod 755 {} +
 dpkg-deb --root-owner-group --build "$INSTALL_ROOT" "$PROJECT_DIR/dist/codenotch_0.2.0_all.deb"

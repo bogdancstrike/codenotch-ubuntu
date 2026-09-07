@@ -1,7 +1,8 @@
-# Build output
-/dist/
+# Build output. The released .deb is tracked so the README's install command
+# works straight from a clone.
+/dist/*
+!/dist/*.deb
 /build/
-*.deb
 docs/*.png
 !docs/preview.png
 !docs/preview-widgets.png
