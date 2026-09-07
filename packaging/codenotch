@@ -7,5 +7,10 @@ case "${1:-settings}" in
   status) exec /usr/lib/codenotch/codenotch-worker --info ;;
   verify) exec /usr/lib/codenotch/codenotch-worker --verify "${2:-all}" ;;
   demo) exec /usr/lib/codenotch/codenotch-worker --set demo "${2:-true}" ;;
-  *) printf '%s\n' 'Usage: codenotch {enable|disable|settings|status|verify [AI|all]|demo [true|false]}' >&2; exit 2 ;;
+  weather) exec /usr/lib/codenotch/codenotch-worker --snapshot --widgets ;;
+  search) [ $# -ge 2 ] || { printf '%s\n' 'Usage: codenotch search CITY' >&2; exit 2; }
+          exec /usr/lib/codenotch/codenotch-worker --search "$2" ;;
+  set) [ $# -ge 3 ] || { printf '%s\n' 'Usage: codenotch set KEY JSON' >&2; exit 2; }
+       exec /usr/lib/codenotch/codenotch-worker --set "$2" "$3" ;;
+  *) printf '%s\n' 'Usage: codenotch {enable|disable|settings|status|verify [AI|all]|demo [true|false]|weather|search CITY|set KEY JSON}' >&2; exit 2 ;;
 esac

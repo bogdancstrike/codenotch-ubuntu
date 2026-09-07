@@ -66,7 +66,7 @@ def request_json(url, headers, body=None, local=False):
     handlers=[NoRedirect(),urllib.request.HTTPSHandler(context=context)]
     if local: handlers.append(urllib.request.ProxyHandler({}))
     opener=urllib.request.build_opener(*handlers)
-    req=urllib.request.Request(url,headers={'Accept':'application/json','User-Agent':'Codenotch-Ubuntu/0.1',**headers},data=json.dumps(body).encode() if body is not None else None)
+    req=urllib.request.Request(url,headers={'Accept':'application/json','User-Agent':'Codenotch-Ubuntu/0.2',**headers},data=json.dumps(body).encode() if body is not None else None)
     try:
         with opener.open(req,timeout=5 if local else 15) as response:
             raw=response.read(MAX_BYTES+1)

@@ -8,8 +8,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 from codenotch import model
-from codenotch.providers import Provider, discover, sqlite_rows, request_json, NoRedirect, glm_key
-from codenotch.worker import DEFAULTS, atomic_json, configuration, update_provider, demo_snapshot, collect
+from codenotch import widgets
+from codenotch.providers import Provider, discover, sqlite_rows, request_json, NoRedirect, glm_key, claude_profile, antigravity_signed_in
+from codenotch.worker import DEFAULTS, Lock, atomic_json, configuration, update_provider, demo_snapshot, collect
+
+def namespace(**overrides):
+    base=dict(set=None,enable=None,disable=None,demo=False,info=False,verify=None,search=None,widgets=False,snapshot=True)
+    return argparse.Namespace(**{**base,**overrides})
 
 class Parsers(unittest.TestCase):
     def test_claude_merge_and_headline(self):
@@ -52,8 +57,18 @@ class State(unittest.TestCase):
         self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name);self.home=self.root/'home';self.home.mkdir();self.config=self.home/'.config';self.data=self.home/'.local/share';self.p=Provider('claude','Claude','claude',self.home/'.claude')
     def tearDown(self):self.temp.cleanup()
     def test_profile_order(self):
-        (self.home/'.claude-work').mkdir();(self.home/'.claude-alpha').mkdir()
+        for name in ('.claude-work','.claude-alpha'):
+            (self.home/name).mkdir();atomic_json(self.home/name/'settings.json',{})
         self.assertEqual([p.id for p in discover(self.home,self.config,self.data)][:3],['claude','claude:.claude-alpha','claude:.claude-work'])
+    def test_unrelated_dotclaude_directory_is_not_a_profile(self):
+        (self.home/'.claude-flow').mkdir();(self.home/'.claude-flow'/'neural').mkdir()
+        self.assertFalse(claude_profile(self.home/'.claude-flow'))
+        self.assertNotIn('claude:.claude-flow',[p.id for p in discover(self.home,self.config,self.data)])
+    def test_antigravity_cli_counts_as_signed_in(self):
+        self.assertFalse(antigravity_signed_in(self.home,self.config))
+        (self.home/'.gemini/antigravity-cli').mkdir(parents=True)
+        atomic_json(self.home/'.gemini/oauth_creds.json',{'access_token':'x'})
+        self.assertTrue(antigravity_signed_in(self.home,self.config))
     def test_disable_never_reads_credentials_and_purges(self):
         with patch('codenotch.worker.detected',side_effect=AssertionError('read disabled credentials')):
             out=update_provider(self.p,{'windows':[{'fraction':.73}]},{**DEFAULTS,'disabled':['claude']},self.home,self.config,self.data,'all')
@@ -93,7 +108,7 @@ class State(unittest.TestCase):
         self.assertIsNone(glm_key(self.home,self.config,self.data))
     def test_worker_disabled_transition_is_persisted(self):
         atomic_json(self.home/'.claude/.credentials.json',{'claudeAiOauth':{'accessToken':'never-output-this'}})
-        args=argparse.Namespace(set=None,enable=None,disable='claude',demo=False,info=False,verify=None)
+        args=namespace(disable='claude')
         with patch('codenotch.worker.locations',return_value=(self.home,self.config,self.data,self.root/'cache')):
             out=collect(args)
         claude=next(p for p in out['providers'] if p['id']=='claude')
@@ -107,7 +122,86 @@ class State(unittest.TestCase):
         self.assertNotIn('borrowed-secret',json.dumps(out))
     def test_demo_does_not_read_credentials(self):
         with patch('codenotch.providers.read_json',side_effect=AssertionError('read credentials')):
-            demo=demo_snapshot([self.p],DEFAULTS)
+            demo=demo_snapshot([self.p],DEFAULTS,self.root/'cache')
         self.assertEqual(demo['providers'][0]['status'],'demo')
+
+    def test_new_settings_are_validated(self):
+        atomic_json(self.config/'codenotch/settings.json',
+                    {'widgets':['clock','nope','clock'],'pollSeconds':2,'weatherLat':'x','weatherLon':4.0,'textContrast':'neon','dateStyle':'huge'})
+        out=configuration(self.config)
+        self.assertEqual(out['widgets'],['clock'])
+        self.assertEqual(out['pollSeconds'],DEFAULTS['pollSeconds'])
+        self.assertIsNone(out['weatherLat']);self.assertIsNone(out['weatherLon'])
+        self.assertEqual(out['textContrast'],'high');self.assertEqual(out['dateStyle'],'medium')
+    def test_idle_poll_never_faster_than_active_poll(self):
+        atomic_json(self.config/'codenotch/settings.json',{'pollSeconds':600,'idlePollSeconds':60})
+        self.assertEqual(configuration(self.config)['idlePollSeconds'],600)
+    def test_settings_write_does_not_wait_for_a_running_poll(self):
+        cache=self.root/'cache'/'codenotch'
+        with Lock(cache/'poll.lock') as held:
+            self.assertTrue(held.held)
+            with Lock(cache/'poll.lock',blocking=False) as second:
+                self.assertFalse(second.held)   # a second poll declines instead of queueing
+            with Lock(cache/'settings.lock') as settings:
+                self.assertTrue(settings.held)  # settings use their own lock and never wait
+    def test_snapshot_falls_back_to_cache_while_another_poll_runs(self):
+        cache=self.root/'cache'
+        atomic_json(self.home/'.claude/.credentials.json',{'claudeAiOauth':{'accessToken':'x'}})
+        with patch('codenotch.worker.locations',return_value=(self.home,self.config,self.data,cache)):
+            with Lock(cache/'codenotch'/'poll.lock'):
+                with patch.object(Provider,'fetch',side_effect=AssertionError('polled while busy')):
+                    out=collect(namespace())
+        self.assertTrue(out['busy'])
+
+class Widgets(unittest.TestCase):
+    def setUp(self):
+        self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name)
+    def tearDown(self):self.temp.cleanup()
+    def test_weather_is_cached_between_calls(self):
+        settings={**DEFAULTS,'weatherLat':44.4,'weatherLon':26.1}
+        cache={'weather':{'temp':21,'updatedAt':time.time(),'key':'44.4,26.1,metric'}}
+        with patch('codenotch.widgets.fetch_weather',side_effect=AssertionError('refetched inside the window')):
+            self.assertEqual(widgets.weather(settings,cache)['temp'],21)
+    def test_weather_refetches_when_the_place_changes(self):
+        settings={**DEFAULTS,'weatherLat':1.0,'weatherLon':2.0}
+        cache={'weather':{'temp':21,'updatedAt':time.time(),'key':'44.4,26.1,metric'}}
+        with patch('codenotch.widgets.fetch_weather',return_value={'temp':30}):
+            self.assertEqual(widgets.weather(settings,cache)['temp'],30)
+    def test_weather_keeps_the_last_reading_when_offline(self):
+        settings={**DEFAULTS,'weatherLat':44.4,'weatherLon':26.1}
+        cache={'weather':{'temp':21,'updatedAt':0,'key':'44.4,26.1,metric'}}
+        with patch('codenotch.widgets.fetch_weather',side_effect=model.ProviderError('offline','no network')):
+            out=widgets.weather(settings,cache)
+        self.assertEqual(out['temp'],21);self.assertEqual(out['status'],'stale')
+    def test_weather_needs_a_location(self):
+        with self.assertRaises(model.ProviderError):widgets.fetch_weather({**DEFAULTS})
+    def test_device_batteries_are_ignored(self):
+        mouse=self.root/'hidpp_battery_0';mouse.mkdir()
+        (mouse/'type').write_text('Battery\n');(mouse/'scope').write_text('Device\n');(mouse/'capacity').write_text('55\n')
+        self.assertIsNone(widgets.battery(self.root))
+        system=self.root/'BAT0';system.mkdir()
+        (system/'type').write_text('Battery\n');(system/'capacity').write_text('76\n');(system/'status').write_text('Charging\n')
+        self.assertEqual(widgets.battery(self.root),{'percent':76,'charging':True,'state':'Charging','name':'BAT0'})
+    def test_cpu_needs_two_samples_and_never_invents_a_value(self):
+        proc=self.root;(proc/'stat').write_text('cpu 100 0 100 800 0 0 0 0 0 0\n')
+        (proc/'meminfo').write_text('MemTotal: 16000000 kB\nMemFree: 2000000 kB\nMemAvailable: 8000000 kB\n')
+        cache={}
+        first=widgets.system(cache,proc)
+        self.assertNotIn('cpu',first);self.assertAlmostEqual(first['mem'],.5)
+        (proc/'stat').write_text('cpu 200 0 200 900 0 0 0 0 0 0\n')
+        second=widgets.system(cache,proc)
+        self.assertAlmostEqual(second['cpu'],1-100/300)
+    def test_search_ignores_short_queries(self):
+        with patch('codenotch.widgets.request_json',side_effect=AssertionError('searched')):
+            self.assertEqual(widgets.search_places('a'),[])
+    def test_search_drops_rows_without_coordinates(self):
+        payload={'results':[{'name':'Nowhere'},{'name':'Cluj','admin1':'Cluj','country':'Romania','latitude':46.77,'longitude':23.6}]}
+        with patch('codenotch.widgets.request_json',return_value=payload):
+            out=widgets.search_places('cluj')
+        self.assertEqual([r['name'] for r in out],['Cluj'])
+        self.assertEqual(out[0]['label'],'Cluj, Cluj, Romania')
+    def test_collect_only_gathers_enabled_widgets(self):
+        with patch('codenotch.widgets.weather',side_effect=AssertionError('weather not requested')):
+            self.assertEqual(widgets.collect({**DEFAULTS,'widgets':['clock','date']},{}),{})
 
 if __name__=='__main__': unittest.main()

@@ -126,7 +126,7 @@ def battery(root=Path('/sys/class/power_supply')):
         try:
             if _read(entry / 'type') != 'Battery' or _read(entry / 'scope') == 'Device':
                 continue
-            percent = number(_read(entry / 'capacity'))
+            percent = _number(_read(entry / 'capacity'))
             if percent is None:
                 continue
             state = _read(entry / 'status') or 'Unknown'
@@ -142,6 +142,13 @@ def _read(path):
         return path.read_text().strip()
     except OSError:
         return ''
+
+
+def _number(text):
+    try:
+        return number(float(text))
+    except (TypeError, ValueError):
+        return None
 
 
 def system(cache, proc=Path('/proc')):

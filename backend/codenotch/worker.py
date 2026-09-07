@@ -197,7 +197,7 @@ def collect(args):
             return {**info_snapshot(providers,settings,old,widget_cache),'busy':True}
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
             futures=[pool.submit(update_provider,p,old.get(p.id,{}),settings,home,config,data,args.verify) for p in providers]
-            widget_job=pool.submit(safe_widgets,settings,widget_cache,bool(args.verify))
+            widget_job=pool.submit(safe_widgets,settings,widget_cache,bool(args.verify or args.widgets))
             rows=[f.result() for f in futures]
             current=widget_job.result()
         snapshot=dict(version=__version__,settings=settings,providers=rows,widgets=current,generatedAt=time.time())
@@ -218,6 +218,7 @@ def main():
     parser.add_argument('--info',action='store_true'); parser.add_argument('--verify',metavar='PROVIDER',help='Provider ID or all; respects Retry-After')
     parser.add_argument('--set',nargs=2,metavar=('KEY','JSON'))
     parser.add_argument('--search',metavar='PLACE',help='Search weather locations by name')
+    parser.add_argument('--widgets',action='store_true',help='Force a widget refresh (weather, system)')
     group=parser.add_mutually_exclusive_group(); group.add_argument('--enable'); group.add_argument('--disable')
     args=parser.parse_args()
     try: print(json.dumps(collect(args),ensure_ascii=False,allow_nan=False))

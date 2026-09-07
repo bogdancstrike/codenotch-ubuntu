@@ -1,11 +1,13 @@
 Package: codenotch
-Version: 0.1.0
+Version: 0.2.0
 Section: utils
 Priority: optional
 Architecture: all
 Maintainer: Codenotch Ubuntu Port <codenotch@localhost>
-Depends: python3 (>= 3.10), gnome-shell (>= 46), gnome-shell (<< 51), gnome-shell-extension-prefs, gir1.2-adw-1 (>= 1.4), gir1.2-gtk-4.0, ca-certificates
+Depends: python3 (>= 3.10), python3-gi, gnome-shell (>= 46), gnome-shell (<< 51), gnome-shell-extension-prefs, gir1.2-adw-1 (>= 1.4), gir1.2-gtk-4.0, gir1.2-secret-1, ca-certificates
 Description: AI usage notch for Ubuntu GNOME
  Screen-edge usage rings adapted from vinzdg/codenotch, with a settings
  divider, AI selection, per-provider verification, usage tooltips,
  read-only credential discovery, and Wayland/X11 GNOME integration.
+ Adds clock, date, weather, battery, and system-load widgets, spring
+ animations, a resting sliver, and Pango-rendered text.

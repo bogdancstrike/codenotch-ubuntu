@@ -1,5 +1,15 @@
-.codenotch-menu { min-width: 365px; }
-.codenotch-menu .popup-menu-content { background-color: #101010; color: #ffffff; border: 1px solid #303030; border-radius: 18px; padding: 10px; }
-.codenotch-menu .popup-menu-item { border-radius: 8px; }
-.codenotch-menu .popup-menu-item:focus, .codenotch-menu .popup-menu-item:hover { background-color: #282828; }
-.codenotch-menu .popup-sub-menu { background-color: #181818; border-radius: 10px; }
+/* The popup keeps the notch's palette; sizes are lifted for legibility. */
+.codenotch-menu { min-width: 380px; }
+.codenotch-menu .popup-menu-content {
+    background-color: #0A0A0A;
+    color: #ffffff;
+    border: 1px solid #3A3A3A;
+    border-radius: 18px;
+    padding: 10px;
+    box-shadow: 0 8px 26px rgba(0, 0, 0, 0.55);
+}
+.codenotch-menu .popup-menu-item { border-radius: 9px; font-size: 13px; }
+.codenotch-menu .popup-menu-item:focus,
+.codenotch-menu .popup-menu-item:hover { background-color: #232323; }
+.codenotch-menu .popup-sub-menu { background-color: #141414; border-radius: 11px; }
+.codenotch-menu .popup-menu-item:insensitive { color: #9AA0A6; }

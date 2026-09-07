@@ -83,7 +83,7 @@ export function stagger(progress,index,count,share=.42) {
 }
 
 // ---------------------------------------------------------------- geometry
-export const WIDGET_EXTENT={clock:[30,64],date:[34,66],weather:[46,64],battery:[32,54],system:[42,58]};
+export const WIDGET_EXTENT={clock:[30,64],date:[40,66],weather:[50,64],battery:[34,54],system:[46,58]};
 function widgetExtent(kind,vertical) {return (WIDGET_EXTENT[kind]??WIDGET_EXTENT.clock)[vertical?0:1];}
 
 /** Ordered cells for the notch: providers, then widgets, then the settings gear. */
@@ -205,21 +205,21 @@ export function drawWidget(cr,kind,data,settings,g,edge,cell,alpha,now=new Date(
     }
     if(kind==='date'){
         const d=dateParts(settings,now);
-        const [wx,wy]=at(horizontal?0:-half+13);text(cr,d.weekday.toUpperCase(),wx,wy+(horizontal?-2:0),10,muted,'center',W.semi,{alpha,tracking:.9});
-        const [dx,dy]=at(horizontal?0:half-8);text(cr,d.day,dx,dy+(horizontal?15:0),15,dim,'center',W.medium,{alpha});
+        const [wx,wy]=at(horizontal?0:-half+11);text(cr,d.weekday.toUpperCase(),wx,wy+(horizontal?-2:0),10,muted,'center',W.semi,{alpha,tracking:.9});
+        const [dx,dy]=at(horizontal?0:half-7);text(cr,d.day,dx,dy+(horizontal?15:0),15,dim,'center',W.medium,{alpha});
         return;
     }
     if(kind==='weather'){
         const w=data??{};
         const ok=Number.isFinite(w.temp);
         if(horizontal){
-            const [ix,iy]=at(-half+15,-2);weatherSymbol(cr,w.symbol??'cloud',ix,iy,21,alpha);
-            const [tx,ty]=at(6,0);text(cr,ok?`${w.temp}°`:'—',tx,ty+6,17,P.white,'center',W.semi,{alpha});
-            if(ok&&Number.isFinite(w.high)){const [hx,hy]=at(6,0);text(cr,`${w.high}° / ${w.low}°`,hx,hy+19,9.5,muted,'center',W.medium,{alpha});}
+            const [ix,iy]=at(-half+13,-2);weatherSymbol(cr,w.symbol??'cloud',ix,iy,21,alpha);
+            const [tx,ty]=at(9,0);text(cr,ok?`${w.temp}°`:'—',tx,ty+6,17,P.white,'center',W.semi,{alpha});
+            if(ok&&Number.isFinite(w.high)){const [hx,hy]=at(9,0);text(cr,`${w.high}° / ${w.low}°`,hx,hy+19,10,muted,'center',W.medium,{alpha});}
             return;
         }
-        const [ix,iy]=at(-half+14);weatherSymbol(cr,w.symbol??'cloud',ix,iy,22,alpha);
-        const [tx,ty]=at(half-13);text(cr,ok?`${w.temp}°`:'—',tx,ty+6,17,P.white,'center',W.semi,{alpha});
+        const [ix,iy]=at(-half+15);weatherSymbol(cr,w.symbol??'cloud',ix,iy,22,alpha);
+        const [tx,ty]=at(half-11);text(cr,ok?`${w.temp}°`:'—',tx,ty+6,17,P.white,'center',W.semi,{alpha});
         return;
     }
     if(kind==='battery'){
@@ -234,11 +234,11 @@ export function drawWidget(cr,kind,data,settings,g,edge,cell,alpha,now=new Date(
         const s=data??{};
         const rows=[['CPU',s.cpu,P.green],['RAM',s.mem,'#5AC8FA']];
         rows.forEach(([label,value,hex],i)=>{
-            const offset=horizontal?-6+i*15:-half+12+i*19;
+            const offset=horizontal?-6+i*15:-half+14+i*20;
             const [x,y]=horizontal?at(0,-offset):at(offset);
-            const left=x-(horizontal?24:22);
-            text(cr,label,left,y+(horizontal?3:2),9.5,muted,'left',W.semi,{alpha,tracking:.6});
-            meter(cr,left+22,y+(horizontal?-1:-2),horizontal?26:22,value??0,hex,alpha);
+            const left=x-(horizontal?26:25);
+            text(cr,label,left,y+(horizontal?3:2),10,muted,'left',W.semi,{alpha,tracking:.6});
+            meter(cr,left+24,y+(horizontal?-1:-2),horizontal?28:26,value??0,hex,alpha);
         });
         return;
     }
