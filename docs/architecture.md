@@ -148,15 +148,18 @@ never even *looked at* — the enablement check happens before detection.
 
 Antigravity is the one provider with a discovery chain, because it has two clients:
 
-1. A running language server (IDE or `agy` CLI) on `127.0.0.1`, discovered only from
+1. A running language server (IDE) on `127.0.0.1`, discovered only from
    same-uid processes and their own sockets.
-2. Otherwise the `agy` CLI's Google login, held in the session keyring. Ordinary polling
+2. The `agy` CLI, queried non-interactively for its structured JSON quota
+   (`agy -p /quota --output-format json`), allowing full allowance reporting without
+   requiring an IDE running.
+3. Otherwise the `agy` CLI's Google login, held in the session keyring. Ordinary polling
    only checks that the item *exists*; the secret is retrieved only when a usage request
    is actually going to be made.
 
-If Google declines to publish the allowance to a third-party client, that is reported as
-"signed in, no allowance published" — not as a missing sign-in, and never as a fabricated
-percentage.
+If Google declines to publish the allowance to a third-party client and no CLI is available,
+that is reported as "signed in, no allowance published" — not as a missing sign-in, and
+never as a fabricated percentage.
 
 ---
 

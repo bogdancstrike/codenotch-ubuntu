@@ -237,14 +237,35 @@ def keyring_token(peek=False):
     except ProviderError: raise
     except Exception: return None
 
+def agy_cli_quota(home):
+    """Query the agy CLI directly in non-interactive print mode."""
+    import shutil, subprocess
+    cmd = shutil.which('agy')
+    if not cmd:
+        for p in (home/'.local/bin/agy', Path('/usr/local/bin/agy'), Path('/usr/bin/agy')):
+            if p.is_file() and os.access(p, os.X_OK):
+                cmd = str(p); break
+    if not cmd: return None
+    try:
+        res = subprocess.run([cmd, '-p', '/quota', '--output-format', 'json'],
+                             capture_output=True, text=True, timeout=12)
+        if res.returncode == 0 and res.stdout.strip():
+            data = json.loads(res.stdout)
+            return PARSERS['gemini'](data, time.time())
+    except (subprocess.SubprocessError, ValueError, KeyError, OSError, ProviderError):
+        pass
+    return None
+
 def antigravity_quota(home,config):
-    """Prefer the running language server; fall back to the CLI's cloud quota."""
+    """Prefer the running language server; fall back to the CLI, then cloud quota."""
     endpoints=bridge_endpoints()
     for port,token in endpoints:
         try:
             body=request_json(f'https://127.0.0.1:{port}/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary',{'x-codeium-csrf-token':token,'Content-Type':'application/json'},{'forceRefresh':True},True)
             return PARSERS['gemini'](body,time.time())
         except ProviderError: pass
+    windows=agy_cli_quota(home)
+    if windows: return windows
     token=keyring_token()
     if token:
         try:

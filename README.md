@@ -148,7 +148,7 @@ settings live.
 | **Claude Code** | `~/.claude/.credentials.json` → Anthropic OAuth usage endpoint | Run `claude` and sign in. Extra `~/.claude-<name>` profiles get their own ring when they hold a login or settings of their own |
 | **Codex** | `~/.codex/auth.json` → ChatGPT usage endpoint | `codex login` with your ChatGPT account; an API-key-only login exposes no allowance |
 | **Cursor** | `~/.config/Cursor/.../state.vscdb` → Cursor usage summary | Sign in inside Cursor. SQLite is opened read-only, WAL included |
-| **Antigravity** | Running language server (IDE or `agy` CLI) → local quota RPC; otherwise the `agy` keyring login | Start Antigravity or run `agy`. If Google will not publish the allowance to another app, that is stated plainly |
+| **Antigravity** | Running language server (IDE) → local quota RPC; otherwise `agy` CLI JSON quota | Start Antigravity or run `agy`. Works with CLI-only setups without an IDE running |
 | **GLM** | Z.ai Coding Plan key in Claude Code, OpenCode, or ZCode | Configure a Z.ai or BigModel plan; the key only ever goes to its matching endpoint |
 | **Grok** | `~/.grok/auth.json` → Grok CLI billing credits | `grok login`. Only xAI-issued sessions are accepted |
 | **OpenCode** | `~/.local/share/opencode/auth.json` → OpenCode Go usage | Sign in to the Go plan |

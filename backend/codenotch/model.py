@@ -102,12 +102,29 @@ def opencode(data, now):
     return require(out)
 
 def antigravity(data, now):
-    out=[]
-    for group in (data.get('response') or {}).get('groups') or []:
+    resp = data.get('response')
+    if isinstance(resp, dict):
+        groups = resp.get('groups') or []
+    else:
+        cmd = data.get('command')
+        cmd_data = cmd.get('data') if isinstance(cmd, dict) else None
+        groups = (cmd_data.get('groups') if isinstance(cmd_data, dict) else None) or data.get('groups') or []
+    out = []
+    for group in groups:
+        gname = group.get('displayName') or group.get('name')
         for row in group.get('buckets') or []:
-            n=number(row.get('remainingFraction'))
-            if n is not None and 0<=n<=1:
-                out.append(window(row.get('bucketId','quota'),group.get('displayName') or row.get('displayName','Usage'),100*(1-n),row.get('resetTime')))
+            n = number(row.get('remainingFraction') if row.get('remainingFraction') is not None else row.get('remaining_fraction'))
+            if n is not None and 0 <= n <= 1:
+                bid = row.get('bucketId') or row.get('id') or 'quota'
+                rname = row.get('displayName') or row.get('name')
+                if gname and rname and rname != gname:
+                    gtag = 'Gemini' if 'Gemini' in gname else 'Claude & GPT' if ('Claude' in gname or '3p' in bid) else gname
+                    wtag = '5h limit' if row.get('window') == '5h' or '5h' in bid or 'Five Hour' in rname else 'Weekly limit' if row.get('window') == 'weekly' or 'weekly' in bid or 'Weekly' in rname else rname
+                    label = f'{gtag} ({wtag})'
+                else:
+                    label = gname or rname or 'Usage'
+                reset = row.get('resetTime') or row.get('reset_time')
+                out.append(window(bid, label, 100 * (1 - n), reset))
     return require(out)
 
 PARSERS = dict(claude=claude,codex=codex,cursor=cursor,glm=glm,grok=grok,opencode=opencode,gemini=antigravity)

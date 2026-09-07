@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 from codenotch import model
 from codenotch import widgets
-from codenotch.providers import Provider, discover, sqlite_rows, request_json, NoRedirect, glm_key, claude_profile, antigravity_signed_in
+from codenotch.providers import Provider, discover, sqlite_rows, request_json, NoRedirect, glm_key, claude_profile, antigravity_signed_in, antigravity_quota, agy_cli_quota
 from codenotch.worker import DEFAULTS, Lock, atomic_json, configuration, update_provider, local_state, demo_snapshot, collect
 
 def namespace(**overrides):
@@ -47,6 +47,16 @@ class Parsers(unittest.TestCase):
     def test_antigravity_remaining_inversion(self):
         out=model.antigravity({'response':{'groups':[{'displayName':'Gemini','buckets':[{'remainingFraction':.8}]}]}},0)
         self.assertAlmostEqual(out[0]['fraction'],.2)
+    def test_antigravity_cli_json_payload(self):
+        payload={'command':{'name':'usage','data':{'groups':[{'name':'Gemini Models','buckets':[{'id':'gemini-5h','name':'Five Hour Limit Remaining','window':'5h','remaining_fraction':0.85,'reset_time':'2026-09-07T20:00:02Z'},{'id':'gemini-weekly','name':'Weekly Limit Remaining','window':'weekly','remaining_fraction':0.95,'reset_time':'2026-09-14T15:00:02Z'}]},{'name':'Claude and GPT models','buckets':[{'id':'3p-5h','name':'Five Hour Limit Remaining','window':'5h','remaining_fraction':1.0,'reset_time':'2026-09-07T22:00:00Z'}]}]}}}
+        out=model.antigravity(payload,0)
+        self.assertEqual(len(out),3)
+        self.assertAlmostEqual(out[0]['fraction'],0.15)
+        self.assertEqual(out[0]['label'],'Gemini (5h limit)')
+        self.assertAlmostEqual(out[1]['fraction'],0.05)
+        self.assertEqual(out[1]['label'],'Gemini (Weekly limit)')
+        self.assertAlmostEqual(out[2]['fraction'],0.0)
+        self.assertEqual(out[2]['label'],'Claude & GPT (5h limit)')
     def test_invalid_numbers_not_zero(self):
         for value in [None,True,float('nan'),float('inf'),-1,'0']:
             with self.assertRaises(model.ProviderError):model.window('x','x',value)
@@ -76,6 +86,12 @@ class State(unittest.TestCase):
         (self.home/'.gemini/antigravity-cli/cache').mkdir(parents=True)
         with patch('codenotch.providers.keyring_token',side_effect=AssertionError('keyring read during detection')):
             self.assertTrue(antigravity_signed_in(self.home,self.config))
+    def test_antigravity_cli_quota_fallback(self):
+        with patch('codenotch.providers.bridge_endpoints',return_value=[]), \
+             patch('codenotch.providers.agy_cli_quota',return_value=[{'id':'gemini-5h','label':'Gemini (5h limit)','fraction':0.1,'resetsAt':None}]):
+            windows=antigravity_quota(self.home,self.config)
+            self.assertEqual(len(windows),1)
+            self.assertEqual(windows[0]['id'],'gemini-5h')
     def test_disable_never_reads_credentials_and_purges(self):
         with patch('codenotch.worker.detected',side_effect=AssertionError('read disabled credentials')):
             out=update_provider(self.p,{'windows':[{'fraction':.73}]},{**DEFAULTS,'disabled':['claude']},self.home,self.config,self.data,'all')
