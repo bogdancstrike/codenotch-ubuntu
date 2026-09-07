@@ -50,7 +50,7 @@ function write(name,width,height,body){
   {name:'Cursor',glyph:'cursor',status:'ok',windows:[{label:'Included usage',fraction:.52}],sessions:[]}];
  const settings={clock24:true,dateStyle:'medium',textContrast:'high',peek:true};
  const data={weather:{temp:21,feels:20,high:24,low:13,humidity:48,wind:9,text:'Partly cloudy',symbol:'partly',unit:'C',windUnit:'km/h',place:'Bucharest, Romania',updatedAt:Date.now()/1000},
-             system:{cpu:.34,mem:.52,memUsed:8.3,memTotal:16},
+             system:{cpu:.34,mem:.52,memFree:29.1,memTotal:60.4,disk:.74,diskFree:241.5,diskTotal:914.8},
              battery:{percent:76,charging:false,state:'Discharging',name:'BAT0'}};
 
  const draw=(cr,fn)=>{const before=cr.out.length;fn();return cr.out.slice(before);};
