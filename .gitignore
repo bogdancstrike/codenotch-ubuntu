@@ -1,0 +1,29 @@
+# Build output
+/dist/
+/build/
+*.deb
+docs/*.png
+!docs/preview.png
+!docs/preview-widgets.png
+!docs/preview-edges.png
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# Node (only used by the optional preview harness)
+node_modules/
+package-lock.json
+
+# Editors and desktop cruft
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# Local scratch
+/tmp/
+*.log

@@ -213,9 +213,9 @@ export function drawWidget(cr,kind,data,settings,g,edge,cell,alpha,now=new Date(
         const w=data??{};
         const ok=Number.isFinite(w.temp);
         if(horizontal){
-            const [ix,iy]=at(-half+13,-2);weatherSymbol(cr,w.symbol??'cloud',ix,iy,21,alpha);
-            const [tx,ty]=at(9,0);text(cr,ok?`${w.temp}°`:'—',tx,ty+6,17,P.white,'center',W.semi,{alpha});
-            if(ok&&Number.isFinite(w.high)){const [hx,hy]=at(9,0);text(cr,`${w.high}° / ${w.low}°`,hx,hy+19,10,muted,'center',W.medium,{alpha});}
+            const [ix,iy]=at(-half+11,-2);weatherSymbol(cr,w.symbol??'cloud',ix,iy,21,alpha);
+            const [tx,ty]=at(11,0);text(cr,ok?`${w.temp}°`:'—',tx,ty+6,17,P.white,'center',W.semi,{alpha});
+            if(ok&&Number.isFinite(w.high)){const [hx,hy]=at(11,0);text(cr,`${w.high}° / ${w.low}°`,hx,hy+19,10,muted,'center',W.medium,{alpha});}
             return;
         }
         const [ix,iy]=at(-half+15);weatherSymbol(cr,w.symbol??'cloud',ix,iy,22,alpha);

@@ -27,15 +27,17 @@ class CairoSVG {
 }
 const BG='#12161C';
 const root=path.resolve(__dirname,'..');
+// The published images come from scripts/render-shell-preview.js, which uses the
+// real Pango engine. This harness only proves the renderer runs without GNOME,
+// so it writes to a scratch directory instead of docs/.
+const outDir=process.env.CODENOTCH_PREVIEW_DIR||path.join(root,'build/preview');
+fs.mkdirSync(outDir,{recursive:true});
 
 function write(name,width,height,body){
  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="${width}" height="${height}" rx="18" fill="${BG}"/>${body}</svg>`;
- const svgPath=path.join(root,`docs/${name}.svg`);
+ const svgPath=path.join(outDir,`${name}.svg`);
  fs.writeFileSync(svgPath,svg);
- const png=path.join(root,`docs/${name}.png`);
- const done=spawnSync('gjs',['-m',path.join(root,'scripts/svg2png.js'),svgPath,png,'1'],{stdio:'inherit'});
- if(done.error||done.status)console.warn(`  (install gjs to refresh docs/${name}.png)`);
- else console.log(`  docs/${name}.png`);
+ console.log(`  ${path.relative(root,svgPath)}`);
 }
 
 (async()=>{
@@ -99,5 +101,5 @@ function write(name,width,height,body){
   notch(cr,40,166+g.depth*1.15,1.15,['clock','date','weather'],'bottom');
   write('preview-edges',80+g.length*1.15,190+g.depth*2.3+40,cr.out.join(''));
  }
- console.log('Shared-renderer previews regenerated.');
+ console.log('Renderer ran headlessly; SVGs written for inspection.');
 })().catch(e=>{console.error(e);process.exit(1);});

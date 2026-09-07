@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="770" viewBox="0 0 1200 770" role="img" aria-label="Codenotch architecture">
+  <title>Codenotch architecture</title>
+  <defs><marker id="a5AC8FA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5AC8FA"/></marker><marker id="a00FF88" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#00FF88"/></marker><marker id="aFFBC4A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#FFBC4A"/></marker><marker id="aFF6B8B" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#FF6B8B"/></marker><marker id="a9AA0A6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9AA0A6"/></marker></defs>
+  <rect width="1200" height="770" rx="24" fill="#0E1218"/>
+  <text x="40" y="50" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="26" font-weight="700" fill="#F2F5F8">Codenotch architecture</text>
+  <text x="40" y="76" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="14" fill="#7E8A98">The shell draws. A short-lived Python worker does every read, every request, and every write.</text>
+<rect x="40" y="96" width="296" height="286" rx="16" fill="#141A22" stroke="#5AC8FA" stroke-opacity=".45"/>
+<rect x="40" y="96" width="296" height="4" rx="2" fill="#5AC8FA"/>
+<text x="60" y="130" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="16" font-weight="700" fill="#EDF1F5">GNOME Shell · UI thread</text>
+<text x="60" y="150" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="12.5" fill="#7E8A98">Draws; never blocks on I/O</text>
+<rect x="56" y="156" width="264" height="38" rx="10" fill="#0D1116"/>
+<text x="68" y="172" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#DDE3EA">extension.js</text>
+<text x="68" y="188" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="11" fill="#7E8A98">Actors, spring motion, hover, menu</text>
+<rect x="56" y="200" width="264" height="38" rx="10" fill="#0D1116"/>
+<text x="68" y="216" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#DDE3EA">render.js</text>
+<text x="68" y="232" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="11" fill="#7E8A98">Cairo geometry, rings, widgets, cards</text>
+<rect x="56" y="244" width="264" height="38" rx="10" fill="#0D1116"/>
+<text x="68" y="260" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#DDE3EA">stylesheet.css</text>
+<text x="68" y="276" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="11" fill="#7E8A98">Popup menu palette</text>
+<text x="60" y="316" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="11" fill="#6E7A88">Pango text · 60 fps springs</text>
+<text x="60" y="332" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="11" fill="#6E7A88">reactive only while fully open</text>
+<rect x="40" y="412" width="296" height="150" rx="16" fill="#141A22" stroke="#5AC8FA" stroke-opacity=".45"/>
+<rect x="40" y="412" width="296" height="4" rx="2" fill="#5AC8FA"/>
+<text x="60" y="446" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="16" font-weight="700" fill="#EDF1F5">Preferences · own process</text>
+<text x="60" y="466" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="12.5" fill="#7E8A98">gnome-extensions prefs</text>
+<rect x="56" y="472" width="264" height="38" rx="10" fill="#0D1116"/>
+<text x="68" y="488" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#DDE3EA">prefs.js</text>
+<text x="68" y="504" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="11" fill="#7E8A98">Connections, widgets, appearance</text>
+<text x="60" y="544" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="11" fill="#6E7A88">every write goes to the worker</text>
+<rect x="452" y="96" width="296" height="466" rx="16" fill="#141A22" stroke="#00FF88" stroke-opacity=".45"/>
+<rect x="452" y="96" width="296" height="4" rx="2" fill="#00FF88"/>
+<text x="472" y="130" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="16" font-weight="700" fill="#EDF1F5">codenotch-worker · Python</text>
+<text x="472" y="150" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="12.5" fill="#7E8A98">Short-lived; one JSON snapshot per run</text>
+<rect x="468" y="156" width="264" height="38" rx="10" fill="#0D1116"/>
+<text x="480" y="172" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#DDE3EA">worker.py</text>
+<text x="480" y="188" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="11" fill="#7E8A98">Settings, locks, snapshot assembly</text>
+<rect x="468" y="200" width="264" height="38" rx="10" fill="#0D1116"/>
+<text x="480" y="216" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#DDE3EA">providers.py</text>
+<text x="480" y="232" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="11" fill="#7E8A98">Seven read-only usage adapters</text>
+<rect x="468" y="244" width="264" height="38" rx="10" fill="#0D1116"/>
+<text x="480" y="260" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#DDE3EA">activity.py</text>
+<text x="480" y="276" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="11" fill="#7E8A98">Live sessions from local state</text>
+<rect x="468" y="288" width="264" height="38" rx="10" fill="#0D1116"/>
+<text x="480" y="304" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#DDE3EA">widgets.py</text>
+<text x="480" y="320" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="11" fill="#7E8A98">Weather, battery, /proc load</text>
+<rect x="468" y="332" width="264" height="38" rx="10" fill="#0D1116"/>
+<text x="480" y="348" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#DDE3EA">model.py</text>
+<text x="480" y="364" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="11" fill="#7E8A98">Strict parsers; no invented 0%</text>
+<text x="472" y="404" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="11" fill="#6E7A88">settings.lock  short, never held</text>
+<text x="472" y="420" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="11" fill="#6E7A88">               across a request</text>
+<text x="472" y="436" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="11" fill="#6E7A88">poll.lock      non-blocking; a busy</text>
+<text x="472" y="452" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="11" fill="#6E7A88">               cycle answers from cache</text>
+<rect x="864" y="96" width="296" height="214" rx="16" fill="#141A22" stroke="#FFBC4A" stroke-opacity=".45"/>
+<rect x="864" y="96" width="296" height="4" rx="2" fill="#FFBC4A"/>
+<text x="884" y="130" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="16" font-weight="700" fill="#EDF1F5">Local, read-only</text>
+<text x="884" y="150" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="12.5" fill="#7E8A98">Owned by the AI tools themselves</text>
+<rect x="880" y="156" width="264" height="38" rx="10" fill="#0D1116"/>
+<text x="892" y="172" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#DDE3EA">~/.claude  ~/.codex  ~/.grok</text>
+<text x="892" y="188" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="11" fill="#7E8A98">OAuth files kept by each CLI</text>
+<rect x="880" y="200" width="264" height="38" rx="10" fill="#0D1116"/>
+<text x="892" y="216" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#DDE3EA">state.vscdb   /proc</text>
+<text x="892" y="232" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="11" fill="#7E8A98">SQLite (ro), same-uid processes</text>
+<rect x="880" y="244" width="264" height="38" rx="10" fill="#0D1116"/>
+<text x="892" y="260" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#DDE3EA">session keyring</text>
+<text x="892" y="276" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="11" fill="#7E8A98">Antigravity CLI login, on demand</text>
+<rect x="864" y="340" width="296" height="232" rx="16" fill="#141A22" stroke="#FF6B8B" stroke-opacity=".45"/>
+<rect x="864" y="340" width="296" height="4" rx="2" fill="#FF6B8B"/>
+<text x="884" y="374" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="16" font-weight="700" fill="#EDF1F5">Network</text>
+<text x="884" y="394" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="12.5" fill="#7E8A98">TLS verified · redirects refused</text>
+<rect x="880" y="400" width="264" height="38" rx="10" fill="#0D1116"/>
+<text x="892" y="416" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#DDE3EA">provider usage endpoints</text>
+<text x="892" y="432" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="11" fill="#7E8A98">Anthropic, OpenAI, Cursor, Z.ai, xAI</text>
+<rect x="880" y="444" width="264" height="38" rx="10" fill="#0D1116"/>
+<text x="892" y="460" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#DDE3EA">127.0.0.1 bridge</text>
+<text x="892" y="476" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="11" fill="#7E8A98">Antigravity, same-user ports only</text>
+<rect x="880" y="488" width="264" height="38" rx="10" fill="#0D1116"/>
+<text x="892" y="504" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#DDE3EA">open-meteo.com</text>
+<text x="892" y="520" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="11" fill="#7E8A98">Weather + geocoding, no API key</text>
+<text x="884" y="560" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="11" fill="#6E7A88">usage 2.5 min · weather 15 min</text>
+<rect x="40" y="600" width="1120" height="128" rx="16" fill="#141A22" stroke="#9AA0A6" stroke-opacity=".45"/>
+<rect x="40" y="600" width="1120" height="4" rx="2" fill="#9AA0A6"/>
+<text x="60" y="634" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="16" font-weight="700" fill="#EDF1F5">State on disk</text>
+<text x="60" y="654" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="12.5" fill="#7E8A98">Private permissions · secret-free · atomic writes</text>
+<rect x="62" y="668" width="336" height="38" rx="10" fill="#0D1116"/><text x="78" y="692" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="12.5" fill="#C8CCD0">~/.config/codenotch/settings.json</text>
+<rect x="442" y="668" width="336" height="38" rx="10" fill="#0D1116"/><text x="458" y="692" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="12.5" fill="#C8CCD0">~/.cache/codenotch/usage.json</text>
+<rect x="802" y="668" width="336" height="38" rx="10" fill="#0D1116"/><text x="818" y="692" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="12.5" fill="#C8CCD0">~/.cache/codenotch/widgets.json</text>
+<line x1="336" y1="206" x2="446" y2="206" stroke="#5AC8FA" stroke-width="2" marker-end="url(#a5AC8FA)"/>
+<text x="391.0" y="197.0" text-anchor="middle" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="11" font-weight="700" fill="#5AC8FA">Gio.Subprocess</text>
+<text x="391.0" y="221.0" text-anchor="middle" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="10.5" fill="#7E8A98">async · JSON out</text>
+<line x1="336" y1="470" x2="446" y2="430" stroke="#5AC8FA" stroke-width="2" marker-end="url(#a5AC8FA)"/>
+<text x="391.0" y="441.0" text-anchor="middle" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="11" font-weight="700" fill="#5AC8FA">--set --search</text>
+<text x="391.0" y="465.0" text-anchor="middle" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="10.5" fill="#7E8A98">same locks</text>
+<line x1="748" y1="190" x2="858" y2="190" stroke="#FFBC4A" stroke-width="2" marker-end="url(#aFFBC4A)"/>
+<text x="803.0" y="181.0" text-anchor="middle" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="11" font-weight="700" fill="#FFBC4A">read</text>
+<text x="803.0" y="205.0" text-anchor="middle" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="10.5" fill="#7E8A98">never written</text>
+<line x1="748" y1="420" x2="858" y2="420" stroke="#FF6B8B" stroke-width="2" marker-end="url(#aFF6B8B)"/>
+<text x="803.0" y="411.0" text-anchor="middle" font-family="Ubuntu Mono, DejaVu Sans Mono, monospace" font-size="11" font-weight="700" fill="#FF6B8B">HTTPS</text>
+<text x="803.0" y="435.0" text-anchor="middle" font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" font-size="10.5" fill="#7E8A98">in memory only</text>
+<line x1="600" y1="570" x2="600" y2="596" stroke="#9AA0A6" stroke-width="2" marker-end="url(#a9AA0A6)"/>
+</svg>

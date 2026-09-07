@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="238" viewBox="0 0 640 238" role="img" aria-label="Codenotch — AI usage at the edge of your Ubuntu desktop">
+  <title>Codenotch</title>
+  <defs>
+    <linearGradient id="cn-card" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#171C24"/>
+      <stop offset="100%" stop-color="#0C1015"/>
+    </linearGradient>
+    <linearGradient id="cn-word" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#AFB9C4"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="640" height="238" rx="28" fill="url(#cn-card)"/>
+
+  <!-- The notch: flat against the screen edge, inverse corners flaring back into it. -->
+  <path d="M148,0 A28,28 0 0 1 176,28 L176,72 A28,28 0 0 0 204,100 L436,100 A28,28 0 0 0 464,72 L464,28 A28,28 0 0 1 492,0 Z" fill="#000000"/>
+    <g transform="translate(232 50)">
+      <circle r="18" fill="none" stroke="#303030" stroke-width="6.5"/>
+      <circle r="18" fill="none" stroke="#FF3F00" stroke-width="4.6" stroke-linecap="round"
+              stroke-dasharray="82.6 30.5" transform="rotate(-90)"/>
+      <circle r="6.6" fill="#FFFFFF"/>
+    </g>
+    <g transform="translate(292 50)">
+      <circle r="18" fill="none" stroke="#303030" stroke-width="6.5"/>
+      <circle r="18" fill="none" stroke="#00FF88" stroke-width="4.6" stroke-linecap="round"
+              stroke-dasharray="23.8 89.3" transform="rotate(-90)"/>
+      <circle r="6.6" fill="#FFFFFF"/>
+    </g>
+    <g transform="translate(352 50)">
+      <circle r="18" fill="none" stroke="#303030" stroke-width="6.5"/>
+      <circle r="18" fill="none" stroke="#F2FF00" stroke-width="4.6" stroke-linecap="round"
+              stroke-dasharray="58.8 54.3" transform="rotate(-90)"/>
+      <circle r="6.6" fill="#FFFFFF"/>
+    </g>
+  <line x1="388" y1="22" x2="388" y2="78" stroke="#4A4A4A" stroke-width="1.5"/>
+  <path d="M436.01,45.03 L436.44,46.23 L436.75,47.46 L436.94,48.73 L433.36,50.00 L433.31,50.92 L433.18,51.83 L432.96,52.72 L436.01,54.97 L435.46,56.13 L434.81,57.22 L434.05,58.25 L430.62,56.62 L429.94,57.24 L429.20,57.78 L428.41,58.25 L428.97,62.01 L427.77,62.44 L426.54,62.75 L425.27,62.94 L424.00,59.36 L423.08,59.31 L422.17,59.18 L421.28,58.96 L419.03,62.01 L417.87,61.46 L416.78,60.81 L415.75,60.05 L417.38,56.62 L416.76,55.94 L416.22,55.20 L415.75,54.41 L411.99,54.97 L411.56,53.77 L411.25,52.54 L411.06,51.27 L414.64,50.00 L414.69,49.08 L414.82,48.17 L415.04,47.28 L411.99,45.03 L412.54,43.87 L413.19,42.78 L413.95,41.75 L417.38,43.38 L418.06,42.76 L418.80,42.22 L419.59,41.75 L419.03,37.99 L420.23,37.56 L421.46,37.25 L422.73,37.06 L424.00,40.64 L424.92,40.69 L425.83,40.82 L426.72,41.04 L428.97,37.99 L430.13,38.54 L431.22,39.19 L432.25,39.95 L430.62,43.38 L431.24,44.06 L431.78,44.80 L432.25,45.59 Z M428.68,50.00 A4.68,4.68 0 1 0 419.32,50.00 A4.68,4.68 0 1 0 428.68,50.00 Z" fill="#FFFFFF" fill-rule="evenodd"/>
+
+  <g font-family="Ubuntu, Cantarell, DejaVu Sans, sans-serif" text-anchor="middle">
+    <text x="320" y="168" fill="url(#cn-word)" font-size="47" font-weight="700" letter-spacing="-1.2">Codenotch</text>
+    <text x="320" y="196" fill="#7E8A98" font-size="16" font-weight="500">AI usage · clock · date · weather, at the screen edge</text>
+    <text x="320" y="219" fill="#4E5A67" font-size="12.5" font-weight="600" letter-spacing="1.8">UBUNTU · GNOME SHELL 46–50</text>
+  </g>
+</svg>
