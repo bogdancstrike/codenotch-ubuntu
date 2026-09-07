@@ -108,6 +108,25 @@ export default class Codenotch extends Extension {
         this._sources.add(id);return id;
     }
     _removeTimer(id){if(id&&this._sources.has(id)){GLib.source_remove(id);this._sources.delete(id);}}
+    /** Everything the notch draws, as one comparable string. */
+    _digest() {
+        const rings=this._providers.map(p=>`${p.id}:${p.status}:${p.windows?.[0]?.fraction??''}:${(p.sessions??[]).map(s=>s.state).join('')}`).join('|');
+        const cells=this._widgets.map(k=>`${k}:${JSON.stringify(this._widgetData[k]??null)}`).join('|');
+        const look=[this._settings.edge,this._settings.scale,this._settings.textContrast,
+            this._settings.clock24,this._settings.clockSeconds,this._settings.dateStyle,this._settings.peek].join(',');
+        return `${rings}#${cells}#${look}`;
+    }
+    // A poll that changes nothing should cost nothing: no repaint, no cairo.
+    _invalidate(force=false) {
+        const digest=this._digest();
+        if(!force&&digest===this._drawn)return;
+        this._drawn=digest;this._notch?.queue_repaint();
+    }
+    _openPreferences() {
+        // openPreferences() is async; an unhandled rejection ends up in the journal.
+        try{this.openPreferences()?.catch?.(e=>logError(e,'codenotch preferences'));}
+        catch(e){logError(e,'codenotch preferences');}
+    }
     _queueLayout(){
         if(!this._alive||this._layoutTimer)return;
         this._layoutTimer=this._timeout(30,()=>{this._layoutTimer=null;this._layout();return false;});
@@ -195,7 +214,12 @@ export default class Codenotch extends Extension {
     }
 
     // ------------------------------------------------------------- animation
-    _expand(){if(this._target!==1){this._target=1;this._expanded=true;this._layout();this._animate(true);}}
+    _expand() {
+        if(this._target!==1){this._target=1;this._expanded=true;this._layout();this._animate(true);}
+        // Folded means slow polling, so top up on the way open rather than
+        // keeping the worker warm for a notch nobody is looking at.
+        if(!this._busy&&Date.now()/1000-(this._snapshot?.generatedAt??0)>5){this._run([]);this._schedulePoll();}
+    }
     /** The notch rests as a sliver only when it is closed and settled. */
     _shouldFold(){return this._settings.visibility!=='always'&&this._target!==1&&this._progress<.005;}
     _animate(open) {
@@ -229,7 +253,7 @@ export default class Codenotch extends Extension {
     _finishAnimation() {
         this._removeTimer(this._animation);this._animation=null;
         this._expanded=this._target===1;
-        this._layout();this._notch.queue_repaint();
+        this._layout();this._invalidate(true);
     }
     /** Reactivity and the gear button follow the drawing, never the intent. */
     _syncChrome() {
@@ -237,6 +261,22 @@ export default class Codenotch extends Extension {
         this._notch.reactive=open;
         this._anchor.visible=open;
         this._hotspot.visible=!open&&this._notch.visible&&this._settings.visibility!=='hidden';
+        this._schedulePulse();
+    }
+    _pulsing() {
+        return this._progress>.9&&!!this._notch?.visible&&St.Settings.get().enable_animations
+            &&this._providers.some(p=>p.sessions?.some(s=>s.state!=='idle'));
+    }
+    /** 8 fps, and only while an AI session is busy or waiting. Otherwise the
+     *  notch is completely still and costs nothing between polls. */
+    _schedulePulse() {
+        const wanted=this._pulsing();
+        if(wanted&&!this._pulseTimer){
+            this._pulseTimer=this._timeout(125,()=>{
+                if(!this._pulsing()){this._pulseTimer=null;return false;}
+                this._notch.queue_repaint();return true;
+            });
+        }else if(!wanted&&this._pulseTimer){this._removeTimer(this._pulseTimer);this._pulseTimer=null;}
     }
 
     // ---------------------------------------------------------------- layout
@@ -277,7 +317,9 @@ export default class Codenotch extends Extension {
 
         this._cardBudget=Math.max(160,(area.height-30)/this._scale);
         this._syncChrome();
-        this._notch.queue_repaint();
+        const box=`${this._notch.x},${this._notch.y},${this._notch.width},${this._notch.height},${this._folded}`;
+        const moved=box!==this._box;this._box=box;
+        this._invalidate(moved);
         if(hidden){this._closeAll();}
         else if(this._hover)this._showCard(this._hover,true);
     }
@@ -357,11 +399,13 @@ export default class Codenotch extends Extension {
             this._schedulePoll();return false;
         });
     }
-    /** Local scan cadence. Provider HTTP is throttled by the worker itself. */
+    /** Local scan cadence. Provider HTTP is throttled separately by the worker,
+     *  so this only decides how often the ~15 ms worker process runs. */
     _pollDelay() {
-        if(!this._notch?.visible||Main.overview.visible)return 60000;
+        if(!this._notch?.visible||Main.overview.visible)return 120000;
         if(this._providers.some(p=>p.sessions?.some(s=>s.state!=='idle')))return 6000;
-        return this._expanded?10000:20000;
+        if(this._progress>.9)return 15000;
+        return 30000;   // folded: nothing on screen changes until it is opened
     }
     _showError(message){if(this._statusItem)this._statusItem.label.text=message;}
     _accept(data) {
@@ -377,7 +421,7 @@ export default class Codenotch extends Extension {
             if(this._menu?.isOpen)this._rebuildPending=true;else this._buildMenu();
         }else this._updateMenu();
         if(before!==JSON.stringify(this._settings)){this._syncPanel();this._scheduleClock();}
-        this._layout();
+        this._layout();this._schedulePulse();
     }
     _scheduleClock() {
         this._removeTimer(this._clockTimer);this._clockTimer=null;
@@ -420,7 +464,7 @@ export default class Codenotch extends Extension {
         verifyAll.connect('activate',()=>{this._statusItem.label.text='Verifying enabled connections…';this._run(['--verify','all']);});
         this._menu.addMenuItem(verifyAll);
         const prefs=new PopupMenu.PopupMenuItem('Widgets, appearance and more…');
-        prefs.connect('activate',()=>this.openPreferences());this._menu.addMenuItem(prefs);
+        prefs.connect('activate',()=>this._openPreferences());this._menu.addMenuItem(prefs);
         this._updateMenu();this._syncPanel();
     }
     _updateMenu() {
@@ -458,7 +502,7 @@ export default class Codenotch extends Extension {
                     this._layout();this._expand();this._menu.open();
                 }],
                 ['Refresh now',()=>this._run(['--verify','all'])],
-                ['Widgets and appearance…',()=>this.openPreferences()],
+                ['Widgets and appearance…',()=>this._openPreferences()],
             ];
             for(const [label,fn] of entries){
                 const item=new PopupMenu.PopupMenuItem(label);item.connect('activate',fn);this._panel.menu.addMenuItem(item);

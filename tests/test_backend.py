@@ -10,7 +10,7 @@ from unittest.mock import patch
 from codenotch import model
 from codenotch import widgets
 from codenotch.providers import Provider, discover, sqlite_rows, request_json, NoRedirect, glm_key, claude_profile, antigravity_signed_in
-from codenotch.worker import DEFAULTS, Lock, atomic_json, configuration, update_provider, demo_snapshot, collect
+from codenotch.worker import DEFAULTS, Lock, atomic_json, configuration, update_provider, local_state, demo_snapshot, collect
 
 def namespace(**overrides):
     base=dict(set=None,enable=None,disable=None,demo=False,info=False,verify=None,search=None,widgets=False,snapshot=True)
@@ -151,6 +151,26 @@ class State(unittest.TestCase):
                 self.assertFalse(second.held)   # a second poll declines instead of queueing
             with Lock(cache/'settings.lock') as settings:
                 self.assertTrue(settings.held)  # settings use their own lock and never wait
+    def test_local_state_never_asks_for_a_fetch_before_the_deadline(self):
+        old={'status':'ok','nextPoll':time.time()+300,'windows':[{'fraction':.5}]}
+        with patch('codenotch.worker.detected',return_value=True),patch('codenotch.worker.sessions',return_value=[]):
+            row,needs=local_state(self.p,old,DEFAULTS,self.home,self.config,self.data)
+        self.assertFalse(needs);self.assertEqual(row['windows'],old['windows'])
+        with patch('codenotch.worker.detected',return_value=True),patch('codenotch.worker.sessions',return_value=[]):
+            _,forced=local_state(self.p,old,DEFAULTS,self.home,self.config,self.data,'all')
+        self.assertTrue(forced)
+    def test_idle_snapshot_creates_no_thread_pool(self):
+        # The pool costs an import and eight threads every few seconds; an idle
+        # run must not pay for it.
+        cache=self.root/'cache'
+        atomic_json(self.home/'.claude/.credentials.json',{'claudeAiOauth':{'accessToken':'x'}})
+        atomic_json(cache/'codenotch'/'usage.json',{'providers':[
+            {'id':p.id,'status':'ok','windows':[],'nextPoll':time.time()+900} for p in discover(self.home,self.config,self.data)]})
+        import concurrent.futures
+        with patch('codenotch.worker.locations',return_value=(self.home,self.config,self.data,cache)), \
+             patch.object(concurrent.futures,'ThreadPoolExecutor',side_effect=AssertionError('pool created while idle')):
+            out=collect(namespace())
+        self.assertTrue(out['providers'])
     def test_snapshot_falls_back_to_cache_while_another_poll_runs(self):
         cache=self.root/'cache'
         atomic_json(self.home/'.claude/.credentials.json',{'claudeAiOauth':{'accessToken':'x'}})
@@ -207,6 +227,14 @@ class Widgets(unittest.TestCase):
             out=widgets.search_places('cluj')
         self.assertEqual([r['name'] for r in out],['Cluj'])
         self.assertEqual(out[0]['label'],'Cluj, Cluj, Romania')
+    def test_needs_network_matches_the_cache_state(self):
+        settings={**DEFAULTS,'widgets':['weather'],'weatherLat':1.0,'weatherLon':2.0}
+        fresh={'weather':{'updatedAt':time.time(),'key':'1.0,2.0,metric'}}
+        self.assertFalse(widgets.needs_network(settings,fresh))
+        self.assertTrue(widgets.needs_network(settings,fresh,force=True))
+        self.assertTrue(widgets.needs_network(settings,{'weather':{'updatedAt':0,'key':'1.0,2.0,metric'}}))
+        self.assertTrue(widgets.needs_network(settings,{'weather':{'updatedAt':time.time(),'key':'9,9,metric'}}))
+        self.assertFalse(widgets.needs_network({**DEFAULTS,'widgets':['clock']},{}))
     def test_collect_only_gathers_enabled_widgets(self):
         with patch('codenotch.widgets.weather',side_effect=AssertionError('weather not requested')):
             self.assertEqual(widgets.collect({**DEFAULTS,'widgets':['clock','date']},{}),{})

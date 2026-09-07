@@ -64,12 +64,22 @@ update() {
   as_root /usr/bin/dpkg -i "$deb"
 
   gnome-extensions enable "$UUID" 2>/dev/null || true
-  if [ "${XDG_SESSION_TYPE:-}" = x11 ]; then
-    printf '%s\n' 'Installed. Press Alt+F2, type r, and press Enter to reload GNOME Shell.'
-  else
-    printf '%s\n' 'Installed. Log out and back in to load the new extension code (Wayland cannot reload it in place).'
+
+  installed=$(sed -n 's/.*"version-name"[^"]*"\([^"]*\)".*/\1/p' \
+    "/usr/share/gnome-shell/extensions/$UUID/metadata.json" 2>/dev/null)
+  running=$(gnome-extensions info "$UUID" 2>/dev/null | sed -n 's/^ *Version: *//p')
+
+  printf '\n%s\n' 'Installed. The worker and the settings window are live now.'
+  if [ -n "$running" ] && [ -n "$installed" ] && [ "$running" != "$installed" ]; then
+    printf 'GNOME Shell is still drawing %s; %s is on disk.\n' "$running" "$installed"
   fi
-  printf '%s\n' 'The worker and the settings window are already up to date.'
+  if [ "${XDG_SESSION_TYPE:-}" = x11 ]; then
+    printf '%s\n' 'Press Alt+F2, type r, then Enter to reload the shell and pick up the new notch.'
+  else
+    printf '%s\n' 'Log out and back in to pick up the new notch. Wayland keeps the loaded' \
+                   'extension module cached for the life of the session, so disabling and' \
+                   're-enabling the extension will not do it.'
+  fi
 }
 
 case "${1:-settings}" in

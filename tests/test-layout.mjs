@@ -72,6 +72,25 @@ assert(settled(value,velocity,0),'spring settles closed');
 assert.equal(clamp(2),1);assert.equal(clamp(-1),0);
 assert.equal(stagger(1,4,5),1);assert(stagger(.1,4,5)<=0);
 
+// A worker snapshot must survive the trip to drawable cells. This is the path
+// that silently produced a widget-free notch when the shell ran stale code.
+{
+    const snapshot={settings:{edge:'right',widgets:['clock','date','weather','battery','system']},
+        widgets:{weather:{temp:21,symbol:'sun'},system:{cpu:.3,mem:.4}},
+        providers:[{id:'claude',enabled:true,detected:true,glyph:'claude',windows:[{fraction:.4}],sessions:[]},
+                   {id:'codex',enabled:true,detected:true,glyph:'openai',windows:[],sessions:[]},
+                   {id:'cursor',enabled:false,detected:false,windows:[],sessions:[]}]};
+    // Exactly what extension.js _accept() does before it lays the notch out.
+    const providers=snapshot.providers.filter(p=>p.enabled&&(p.detected||p.windows?.length));
+    const widgets=snapshot.settings.widgets.filter(k=>k!=='battery'||snapshot.widgets?.battery);
+    assert.deepEqual(providers.map(p=>p.id),['claude','codex'],'disabled providers stay out');
+    assert.deepEqual(widgets,['clock','date','weather','system'],'battery hides itself with no battery');
+    const g=plan(providers,widgets,snapshot.settings.edge,false);
+    assert.equal(g.cells.length,6);
+    assert.deepEqual(g.cells.filter(c=>c.kind==='widget').map(c=>c.ref),widgets);
+    assert.equal(g.dividers.length,2,'one divider between the groups, one before the gear');
+}
+
 // Contrast tiers only ever get lighter.
 assert.equal(tone({textContrast:'high'},'muted'),CONTRAST.high.muted);
 assert.equal(tone({},'muted'),CONTRAST.high.muted);
