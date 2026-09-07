@@ -162,8 +162,8 @@ def _number(text):
         return None
 
 
-def system(cache, proc=Path('/proc')):
-    """CPU busy fraction between the previous sample and now, plus memory in use."""
+def system(cache, proc=Path('/proc'), root='/'):
+    """CPU busy since the previous sample, plus memory and storage headroom."""
     out = {}
     try:
         fields = [int(x) for x in proc.joinpath('stat').read_text().split('\n')[0].split()[1:11]]
@@ -185,8 +185,18 @@ def system(cache, proc=Path('/proc')):
             available = values.get('MemAvailable', values.get('MemFree', 0))
             out['mem'] = max(0.0, min(1.0, 1 - available / values['MemTotal']))
             out['memTotal'] = round(values['MemTotal'] / 1048576, 1)
-            out['memUsed'] = round((values['MemTotal'] - available) / 1048576, 1)
+            out['memFree'] = round(available / 1048576, 1)
     except (OSError, ValueError, IndexError):
+        pass
+    try:
+        stat = os.statvfs(root)
+        total = stat.f_blocks * stat.f_frsize
+        free = stat.f_bavail * stat.f_frsize          # what this user may actually use
+        if total > 0:
+            out['disk'] = max(0.0, min(1.0, 1 - free / total))
+            out['diskTotal'] = round(total / 2 ** 30, 1)
+            out['diskFree'] = round(free / 2 ** 30, 1)
+    except (OSError, ValueError):
         pass
     return out or None
 
@@ -197,6 +207,9 @@ def collect(settings, cache, force=False):
     out = {}
     if 'weather' in wanted:
         out['weather'] = weather(settings, cache, force)
+        # weather() and needs_network() both read cache['weather']; keep the
+        # reading there so the 15-minute window is actually honoured.
+        cache['weather'] = out['weather']
     if 'battery' in wanted:
         found = battery()
         if found:

@@ -17,7 +17,7 @@ widgets, spring animation, and a resting sliver so you always know it is there.
 [![GJS](https://img.shields.io/badge/GJS-Cairo%20%2B%20Pango-F5C211?logo=javascript&logoColor=black)](https://gjs.guide/)
 [![MIT](https://img.shields.io/badge/License-MIT-9AA0A6)](LICENSE)
 
-[**github.com/bogdancstrike/codenotch-ubuntu**](https://github.com/bogdancstrike/codenotch-ubuntu)  ·  made by **Bogdan Doncea**
+[**github.com/bogdancstrike/codenotch-ubuntu**](https://github.com/bogdancstrike/codenotch-ubuntu)  ·  made by **Bogdan D**
 
 <img src="docs/preview.png" alt="The notch with usage rings, clock, date and weather, alongside its hover cards" width="720">
 
@@ -294,7 +294,7 @@ desktop acceptance checklist in [docs/PORTING.md](docs/PORTING.md) still applies
 
 ## About
 
-Made by **Bogdan Doncea** — [github.com/bogdancstrike/codenotch-ubuntu](https://github.com/bogdancstrike/codenotch-ubuntu)
+Made by **Bogdan D** — [github.com/bogdancstrike/codenotch-ubuntu](https://github.com/bogdancstrike/codenotch-ubuntu)
 
 Settings and cached readings live in `~/.config/codenotch/` and `~/.cache/codenotch/`, so
 your AI selection, widgets, and weather location survive package updates, reinstalls, and
@@ -304,5 +304,5 @@ directories to erase them.
 ## License
 
 MIT. Original artwork, geometry, and source-derived behavior © 2026 Vinz; the original
-[`LICENSE`](LICENSE) is retained. The Ubuntu port is by Bogdan Doncea and is not an
+[`LICENSE`](LICENSE) is retained. The Ubuntu port is by Bogdan D and is not an
 official upstream release.

@@ -105,7 +105,7 @@ export function stagger(progress,index,count,share=.42) {
 }
 
 // ---------------------------------------------------------------- geometry
-export const WIDGET_EXTENT={clock:[30,64],date:[40,66],weather:[50,64],battery:[34,54],system:[54,62]};
+export const WIDGET_EXTENT={clock:[30,64],date:[40,66],weather:[50,64],battery:[34,54],system:[78,62]};
 function widgetExtent(kind,vertical) {return (WIDGET_EXTENT[kind]??WIDGET_EXTENT.clock)[vertical?0:1];}
 
 /** Ordered cells for the notch: providers, then widgets, then the settings gear. */
@@ -257,8 +257,8 @@ export function drawWidget(cr,kind,data,settings,g,edge,cell,alpha,now=new Date(
         // number: label left, value right, the bar underneath both.
         const s=data??{};
         const span=horizontal?56:52;
-        [['CPU',s.cpu,P.green],['RAM',s.mem,'#5AC8FA']].forEach(([label,value,hex],i)=>{
-            const [x,y]=horizontal?at(0,-11+i*21):at(-half+15+i*24);
+        [['CPU',s.cpu,P.green],['RAM',s.mem,'#5AC8FA'],['SSD',s.disk,'#C58AF9']].forEach(([label,value,hex],i)=>{
+            const [x,y]=horizontal?at(0,-21+i*21):at(-half+15+i*24);
             const left=x-span/2;
             text(cr,label,left,y,10,muted,'left',W.semi,{alpha,tracking:.7});
             text(cr,Number.isFinite(value)?`${Math.round(value*100)}%`:'—',left+span,y,11,dim,'right',W.medium,{alpha});
@@ -401,10 +401,16 @@ export function widgetCard(kind,data,settings={},now=new Date()) {
                   ['Week',`Day ${Math.ceil((now-new Date(now.getFullYear(),0,0))/86400000)} of ${now.getFullYear()}`]]};
     }
     if(kind==='date'){
-        return {title:'Date',headline:now.toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long'}),
-            rows:[['Year',String(now.getFullYear())],
-                  ['ISO',now.toISOString().slice(0,10)],
-                  ['Time',clockParts(settings,now).time]]};
+        const year=now.getFullYear();
+        const leap=(year%4===0&&year%100!==0)||year%400===0;
+        const day=Math.floor((now-new Date(year,0,0))/86400000);
+        // ISO week: the week owning this date's Thursday.
+        const thursday=new Date(year,now.getMonth(),now.getDate()+4-(now.getDay()||7));
+        const week=Math.ceil(((thursday-new Date(thursday.getFullYear(),0,1))/86400000+1)/7);
+        return {title:'Date',headline:now.toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long',year:'numeric'}),
+            rows:[['Time',clockParts(settings,now).time],
+                  ['Week',`Week ${week}`],
+                  ['Day of year',`${day} of ${leap?366:365}`]]};
     }
     if(kind==='weather'){
         const w=data??{};
@@ -424,9 +430,10 @@ export function widgetCard(kind,data,settings={},now=new Date()) {
     }
     if(kind==='system'){
         const s=data??{};
+        const free=(available,total)=>`${available} free of ${total} GiB`;
         if(Number.isFinite(s.cpu))rows.push(['CPU',`${Math.round(s.cpu*100)}% busy`]);
-        if(Number.isFinite(s.mem))rows.push(['Memory',`${Math.round(s.mem*100)}% used`]);
-        if(Number.isFinite(s.memUsed))rows.push(['Detail',`${s.memUsed} of ${s.memTotal} GiB`]);
+        if(Number.isFinite(s.memFree))rows.push(['Memory',free(s.memFree,s.memTotal)]);
+        if(Number.isFinite(s.diskFree))rows.push(['Storage',free(s.diskFree,s.diskTotal)]);
         return {title:'System',headline:Number.isFinite(s.cpu)?`${Math.round(s.cpu*100)}% CPU`:'—',rows};
     }
     return {title:kind,headline:'',rows};

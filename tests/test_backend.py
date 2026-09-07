@@ -255,6 +255,19 @@ class Widgets(unittest.TestCase):
         self.assertTrue(widgets.needs_network(settings,{'weather':{'updatedAt':0,'key':'1.0,2.0,metric'}}))
         self.assertTrue(widgets.needs_network(settings,{'weather':{'updatedAt':time.time(),'key':'9,9,metric'}}))
         self.assertFalse(widgets.needs_network({**DEFAULTS,'widgets':['clock']},{}))
+    def test_collect_reuses_the_cache_it_writes(self):
+        # The reading has to land where weather() looks for it, or every poll
+        # becomes a fresh request and one failure blanks the widget.
+        settings={**DEFAULTS,'widgets':['weather'],'weatherLat':44.4,'weatherLon':26.1}
+        cache={}
+        reading=dict(temp=21,unit='C',symbol='sun',updatedAt=time.time())
+        with patch('codenotch.widgets.fetch_weather',return_value=reading):
+            first=widgets.collect(settings,cache)
+        self.assertEqual(first['weather']['temp'],21)
+        self.assertFalse(widgets.needs_network(settings,cache))
+        with patch('codenotch.widgets.fetch_weather',side_effect=AssertionError('refetched within the window')):
+            second=widgets.collect(settings,cache)
+        self.assertEqual(second['weather']['temp'],21)
     def test_collect_only_gathers_enabled_widgets(self):
         with patch('codenotch.widgets.weather',side_effect=AssertionError('weather not requested')):
             self.assertEqual(widgets.collect({**DEFAULTS,'widgets':['clock','date']},{}),{})

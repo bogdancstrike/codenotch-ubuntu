@@ -4,6 +4,8 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
+const REPOSITORY='https://github.com/bogdancstrike/codenotch-ubuntu';
+
 // Canonical widget order; the notch draws them in this sequence.
 const WIDGETS=[
     ['clock','Clock','The current time, straight from the system clock.'],
@@ -22,7 +24,8 @@ export default class CodenotchPreferences extends ExtensionPreferences {
         const connections=new Adw.PreferencesPage({title:'Connections',icon_name:'network-transmit-receive-symbolic'});
         const widgets=new Adw.PreferencesPage({title:'Widgets',icon_name:'preferences-desktop-symbolic'});
         const appearance=new Adw.PreferencesPage({title:'Appearance',icon_name:'preferences-desktop-appearance-symbolic'});
-        for(const page of [connections,widgets,appearance])window.add(page);
+        const about=new Adw.PreferencesPage({title:'About',icon_name:'help-about-symbolic'});
+        for(const page of [connections,widgets,appearance,about])window.add(page);
 
         this._integrations=new Adw.PreferencesGroup({title:'AI integrations',description:'Choose the AIs shown in your notch. Verification uses the login already held by each tool.'});
         connections.add(this._integrations);
@@ -39,7 +42,9 @@ export default class CodenotchPreferences extends ExtensionPreferences {
         this._appearance=new Adw.PreferencesGroup({title:'Notch',description:'The original black silhouette, rings, and tooltip proportions.'});
         appearance.add(this._appearance);
         this._readability=new Adw.PreferencesGroup({title:'Readability'});appearance.add(this._readability);
-        this._about=new Adw.PreferencesGroup({title:'About'});appearance.add(this._about);
+        this._identity=new Adw.PreferencesGroup();about.add(this._identity);
+        this._install=new Adw.PreferencesGroup({title:'This install'});about.add(this._install);
+        this._care=new Adw.PreferencesGroup({title:'Privacy and maintenance'});about.add(this._care);
 
         window.connect('close-request',()=>{this._alive=false;this._process?.force_exit();return false;});
         this._run(['--info'],data=>{if(data)this._build(data);});
@@ -82,6 +87,9 @@ export default class CodenotchPreferences extends ExtensionPreferences {
         row.add_suffix(toggle);row.set_activatable_widget(toggle);
         toggle.connect('notify::active',()=>{if(!this._syncing)change(toggle.active);});
         group.add(row);return toggle;
+    }
+    _fact(group,title,subtitle) {
+        const row=new Adw.ActionRow({title,subtitle});group.add(row);return row;
     }
     _combo(group,title,subtitle,values,keys,current,change) {
         const row=new Adw.ComboRow({title,subtitle,model:Gtk.StringList.new(values),selected:Math.max(0,keys.indexOf(current))});
@@ -156,21 +164,42 @@ export default class CodenotchPreferences extends ExtensionPreferences {
         this._combo(this._readability,'Text contrast','Lifts the secondary labels in the notch and its cards.',
             ['Standard','High (recommended)','Highest'],['normal','high','higher'],s.textContrast,v=>this._set('textContrast',v));
 
-        const about=new Adw.ActionRow({title:`Codenotch for Ubuntu ${data.version??''}`.trim(),
-            subtitle:'Original design and artwork © 2026 Vinz · MIT license\nUbuntu adaptation. Your settings are kept in ~/.config and survive updates.'});
-        this._about.add(about);
-        const author=new Adw.ActionRow({title:'Made by Bogdan Doncea',subtitle:'Ubuntu GNOME port and its widgets, animation, and settings.'});
-        this._about.add(author);
-        const repo=new Adw.ActionRow({title:'Project repository',subtitle:'https://github.com/bogdancstrike/codenotch-ubuntu'});
-        repo.add_suffix(new Gtk.LinkButton({uri:'https://github.com/bogdancstrike/codenotch-ubuntu',label:'Open',valign:Gtk.Align.CENTER}));
-        this._about.add(repo);
-        const source=new Adw.ActionRow({title:'Update from a checkout',
-            subtitle:'Run codenotch --update from the source directory to rebuild and reinstall.'});
-        this._about.add(source);
-        const login=new Adw.ActionRow({title:'Launch at login',
-            subtitle:'GNOME restores enabled extensions when you sign in. Disable Codenotch in the Extensions app to stop it.'});
-        this._about.add(login);
+        this._buildAbout(data);
         this._update(data);
+    }
+
+    _buildAbout(data) {
+        const version=this.metadata?.['version-name']??data.version??'';
+        this._fact(this._identity,`Codenotch for Ubuntu ${version}`.trim(),
+            'AI usage rings, clock, date and weather at the edge of your screen.');
+        this._fact(this._identity,'Made by Bogdan D','© 2026 Bogdan D · MIT license');
+        const repo=this._fact(this._identity,'Project repository',REPOSITORY);
+        repo.add_suffix(new Gtk.LinkButton({uri:REPOSITORY,label:'Open',valign:Gtk.Align.CENTER}));
+
+        const enabled=(data.providers??[]).filter(p=>p.enabled).length;
+        this._fact(this._install,'AI connections',`${enabled} of ${(data.providers??[]).length} enabled`);
+        this._aboutWidgets=this._fact(this._install,'Widgets','None');
+        this._aboutPoll=this._fact(this._install,'Usage refresh','');
+        this._fact(this._install,'Your settings',
+            '~/.config/codenotch/settings.json — kept across updates and reinstalls');
+
+        this._fact(this._care,'Credentials',
+            'Read from each AI tool, used in memory, never stored, refreshed, or logged.');
+        this._fact(this._care,'Network',
+            'Provider usage endpoints and Open-Meteo. No account, no telemetry.');
+        this._fact(this._care,'Update','Run codenotch --update from a source checkout.');
+        this._fact(this._care,'Launch at login',
+            'GNOME restores enabled extensions when you sign in.');
+        this._refreshAbout(data.settings);
+    }
+    _refreshAbout(settings) {
+        if(!settings||!this._aboutWidgets)return;
+        const names=new Map(WIDGETS.map(([id,title])=>[id,title]));
+        const chosen=(settings.widgets??[]).map(id=>names.get(id)??id);
+        this._aboutWidgets.set_subtitle(chosen.length?chosen.join(', '):'None');
+        const minutes=(settings.pollSeconds??150)/60;
+        this._aboutPoll.set_subtitle(
+            `Every ${minutes===1?'minute':`${Number.isInteger(minutes)?minutes:minutes.toFixed(1)} minutes`} while you work`);
     }
 
     /** The switches are the truth; never rebuild the list from a cached copy. */
@@ -228,6 +257,7 @@ export default class CodenotchPreferences extends ExtensionPreferences {
         if(data.settings&&!this._writes){
             this._settings=data.settings;
             this._current?.set_subtitle(data.settings.weatherPlace||'Not set — search above');
+            this._refreshAbout(data.settings);
             for(const [id,toggle] of this._widgetSwitches??[])toggle.active=(data.settings.widgets??[]).includes(id);
         }
         this._syncing=false;

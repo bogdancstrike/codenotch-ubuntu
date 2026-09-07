@@ -3,7 +3,7 @@ Version: 0.2.0
 Section: utils
 Priority: optional
 Architecture: all
-Maintainer: Bogdan Doncea <donceabogdan97@gmail.com>
+Maintainer: Bogdan D <donceabogdan97@gmail.com>
 Homepage: https://github.com/bogdancstrike/codenotch-ubuntu
 Depends: python3 (>= 3.10), python3-gi, gnome-shell (>= 46), gnome-shell (<< 51), gnome-shell-extension-prefs, gir1.2-adw-1 (>= 1.4), gir1.2-gtk-4.0, gir1.2-secret-1, ca-certificates
 Description: AI usage notch for Ubuntu GNOME

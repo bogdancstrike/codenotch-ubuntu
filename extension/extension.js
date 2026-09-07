@@ -342,7 +342,10 @@ export default class Codenotch extends Extension {
     _showCard(hit,force=false) {
         if(!this._alive||!this._card)return;
         if(!hit||this._progress<.9||this._menu?.isOpen){
-            if(this._hover){this._hover=null;this._card?.hide();this._tail?.hide();}
+            // Unconditional: a visible card with no hover would otherwise be
+            // stranded, because the old guard only hid it when _hover was set.
+            this._hover=null;
+            if(this._card?.visible){this._card.hide();this._tail?.hide();}
             return;
         }
         if(hit.kind==='provider'&&!this._providers[hit.index]){this._showCard(null);return;}
