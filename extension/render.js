@@ -1,6 +1,7 @@
 // Geometry and palette ported from vinzdg/codenotch (MIT, Copyright 2026 Vinz).
 // Pure drawing module; used unchanged by GNOME and the screenshot harness.
 import {GLYPHS} from './glyphs.js';
+import {headline} from './usage.js';
 
 export const PX=44/117;
 export const D={
@@ -270,7 +271,7 @@ export function drawWidget(cr,kind,data,settings,g,edge,cell,alpha,now=new Date(
 
 // -------------------------------------------------------------------- rings
 export function ring(cr,p,cx,cy,phase=0,alpha=1,settings={}) {
-    const f=p.windows?.[0]?.fraction;
+    const f=headline(p,settings)?.fraction;
     const stale=!['ok','demo'].includes(p.status);
     cr.setLineCap(1);cr.newPath();cr.arc(cx,cy,(D.ring-D.track)/2,0,Math.PI*2);color(cr,P.track,alpha);cr.setLineWidth(D.track);cr.stroke();
     if(Number.isFinite(f)&&f>0){cr.newPath();cr.arc(cx,cy,(D.ring-D.track)/2,-Math.PI/2,-Math.PI/2+Math.PI*2*Math.min(1,f));color(cr,band(f),alpha*(stale?.4:1));cr.setLineWidth(D.stroke);cr.stroke();}

@@ -97,3 +97,11 @@ assert.equal(tone({},'muted'),CONTRAST.high.muted);
 assert.equal(W.semi,600);
 
 console.log('Geometry, gear centring, sliver size, widgets, spring motion, and contrast checks passed.');
+
+const {headline}=await import('../extension/usage.js');
+const quotas={id:'codex',windows:[{id:'session',fraction:.15},{id:'weekly',fraction:.98}]};
+assert.equal(headline(quotas).id,'weekly');
+assert.equal(headline(quotas,{pinnedWindows:{codex:'session'}}).id,'session');
+assert.equal(headline(quotas,{pinnedWindows:{claude:'session',codex:'removed'}}).id,'weekly');
+assert.equal(headline({windows:[{fraction:NaN},{fraction:-1}]}),null);
+assert.equal(headline({}),null);

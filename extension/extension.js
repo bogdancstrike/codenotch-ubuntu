@@ -12,6 +12,8 @@ import * as BoxPointer from 'resource:///org/gnome/shell/ui/boxpointer.js';
 import {D,P,W,plan,point,drawNotch,drawCard,cardLayout,drawWidgetCard,widgetCard,widgetCardLayout,
         hitTest,color,setTextEngine,spring,settled,clamp} from './render.js';
 
+import {headline} from './usage.js';
+
 const DEFAULTS={edge:'right',visibility:'hover',scale:1,monitor:-1,panelIcon:true,hideFullscreen:true,
     peek:true,widgets:[],clock24:true,clockSeconds:false,dateStyle:'medium',textContrast:'high',demo:false};
 
@@ -117,7 +119,7 @@ export default class Codenotch extends Extension {
     _removeTimer(id){if(id&&this._sources.has(id)){GLib.source_remove(id);this._sources.delete(id);}}
     /** Everything the notch draws, as one comparable string. */
     _digest() {
-        const rings=this._providers.map(p=>`${p.id}:${p.status}:${p.windows?.[0]?.fraction??''}:${(p.sessions??[]).map(s=>s.state).join('')}`).join('|');
+        const rings=this._providers.map(p=>`${p.id}:${p.status}:${headline(p,this._settings)?.fraction??''}:${(p.sessions??[]).map(s=>s.state).join('')}`).join('|');
         const cells=this._widgets.map(k=>`${k}:${JSON.stringify(this._widgetData[k]??null)}`).join('|');
         const look=[this._settings.edge,this._settings.scale,this._settings.textContrast,
             this._settings.clock24,this._settings.clockSeconds,this._settings.dateStyle,this._settings.peek].join(',');

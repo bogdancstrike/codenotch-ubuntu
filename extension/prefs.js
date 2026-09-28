@@ -113,7 +113,15 @@ export default class CodenotchPreferences extends ExtensionPreferences {
             const verifyRow=new Adw.ActionRow({title:'Verify connection',subtitle:'Checks the saved sign-in and requests fresh usage.'});
             const button=new Gtk.Button({label:'Verify',valign:Gtk.Align.CENTER});verifyRow.add_suffix(button);row.add_row(verifyRow);
             button.connect('clicked',()=>{button.set_sensitive(false);status.set_subtitle('Verifying…');this._run(['--verify',p.id]);});
-            this._rows.set(p.id,{row,toggle,status,usage,checked,button});
+            const pin=new Adw.ComboRow({title:'Ring shows'});row.add_row(pin);
+            pin.connect('notify::selected',()=>{
+                if(this._syncing)return;
+                const keys=this._rows.get(p.id)?.pinKeys??[];
+                const pins={...this._settings.pinnedWindows};
+                if(keys[pin.selected])pins[p.id]=keys[pin.selected];else delete pins[p.id];
+                this._settings.pinnedWindows=pins;this._set('pinnedWindows',pins);
+            });
+            this._rows.set(p.id,{row,toggle,status,usage,checked,button,pin,pinKeys:[]});
         }
 
         // ------------------------------------------------------------ polling
@@ -248,6 +256,9 @@ export default class CodenotchPreferences extends ExtensionPreferences {
         for(const p of data.providers??[]){
             const r=this._rows.get(p.id);if(!r)continue;
             r.toggle.active=p.enabled;
+            r.pinKeys=['',...(p.windows??[]).map(w=>w.id)];
+            r.pin.set_model(Gtk.StringList.new(['Automatic (most used)',...(p.windows??[]).map(w=>w.label)]));
+            r.pin.set_selected(Math.max(0,r.pinKeys.indexOf(data.settings?.pinnedWindows?.[p.id]??'')));
             r.row.set_subtitle(p.status??'Not checked');
             r.status.set_subtitle(p.message??'Not verified yet');
             r.usage.set_subtitle((p.windows??[]).map(w=>`${w.label}: ${Math.round(w.fraction*100)}% used`).join('\n')||'No usage reported');

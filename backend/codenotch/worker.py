@@ -26,7 +26,7 @@ DEFAULTS=dict(
     widgets=['clock','date'],
     clock24=True,clockSeconds=False,dateStyle='medium',
     weatherPlace='',weatherLat=None,weatherLon=None,weatherUnits='metric',
-    textContrast='high',
+    textContrast='high',pinnedWindows={},
 )
 EDGES=('right','left','top','bottom')
 VISIBILITIES=('hover','always','hidden')
@@ -99,6 +99,8 @@ def configuration(config):
     if not isinstance(out['scale'],(int,float)) or not 0.75<=out['scale']<=2: out['scale']=1.0
     if not isinstance(out['monitor'],int): out['monitor']=-1
     out['widgets']=clamp_widgets(out['widgets'])
+    pins=out['pinnedWindows']
+    out['pinnedWindows']={k:v for k,v in pins.items() if isinstance(k,str) and isinstance(v,str) and len(k)<160 and len(v)<160} if isinstance(pins,dict) else {}
     for key,low,high in (('pollSeconds',60,3600),('idlePollSeconds',60,7200)):
         if not isinstance(out[key],int) or not low<=out[key]<=high: out[key]=DEFAULTS[key]
     out['idlePollSeconds']=max(out['idlePollSeconds'],out['pollSeconds'])

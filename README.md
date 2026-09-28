@@ -311,3 +311,8 @@ directories to erase them.
 MIT. Original artwork, geometry, and source-derived behavior © 2026 Vinz; the original
 [`LICENSE`](LICENSE) is retained. The Ubuntu port is by Bogdan D and is not an
 official upstream release.
+
+## Quota selection
+
+Each account's ring shows its most-used quota window. Pin a specific window under
+Settings → Connections → account → Ring shows. Missing pins fall back to automatic.
