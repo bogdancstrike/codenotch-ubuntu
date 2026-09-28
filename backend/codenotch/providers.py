@@ -214,6 +214,8 @@ def discover(home,config,data,settings=None):
         if profile['kind']=='grok': path=path/'auth.json'
         if any(p.kind==profile['kind'] and p.path==path for p in out): continue
         out.append(Provider('profile:'+profile['id'],profile['name'],profile['kind'],path))
+    from .custom import discover as custom_providers
+    out.extend(custom_providers(data))
     for provider in out:
         provider.name=(settings or {}).get('accountLabels',{}).get(provider.id,provider.name)
     return out

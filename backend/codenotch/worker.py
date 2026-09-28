@@ -29,7 +29,7 @@ DEFAULTS=dict(
     widgets=['clock','date'],
     clock24=True,clockSeconds=False,dateStyle='medium',
     weatherPlace='',weatherLat=None,weatherLon=None,weatherUnits='metric',
-    textContrast='high',pinnedWindows={},accountProfiles=[],accountLabels={},enabledExtras=[],
+    textContrast='high',pinnedWindows={},accountProfiles=[],accountLabels={},enabledExtras=[],enabledExtensions=[],
     forecast=False,quotaDisplay='used',windowClock=False,panelUsage=True,panelAccount='',
     notifyQuota=False,notifyReset=False,notifyFailures=False,notifyThreshold=90,
 )
@@ -104,6 +104,7 @@ def configuration(config):
     if not isinstance(out['scale'],(int,float)) or not 0.75<=out['scale']<=2: out['scale']=1.0
     if not isinstance(out['monitor'],int): out['monitor']=-1
     out['widgets']=clamp_widgets(out['widgets'])
+    out['enabledExtensions']=[x for x in out['enabledExtensions'] if isinstance(x,str) and x.startswith('extension:')] if isinstance(out['enabledExtensions'],list) else []
     out['enabledExtras']=[x for x in out['enabledExtras'] if x in ('copilot','kimi')] if isinstance(out['enabledExtras'],list) else []
     out['accountProfiles']=clean_profiles(out['accountProfiles'])
     out['accountLabels']=clean_labels(out['accountLabels'])
@@ -150,6 +151,7 @@ def apply_settings(args,config,root):
             disabled=set(settings['disabled'])
             if args.enable:
                 disabled.discard(args.enable)
+                if args.enable.startswith('extension:') and args.enable not in settings['enabledExtensions']: settings['enabledExtensions'].append(args.enable)
                 if args.enable in ('copilot','kimi') and args.enable not in settings['enabledExtras']: settings['enabledExtras'].append(args.enable)
             if args.disable: disabled.add(args.disable)
             settings['disabled']=sorted(disabled); changed=True
@@ -159,7 +161,7 @@ def apply_settings(args,config,root):
         return settings
 
 def is_enabled(p,settings):
-    return p.id not in settings['disabled'] and (p.kind not in ('copilot','kimi') or p.id in settings['enabledExtras'])
+    return p.id not in settings['disabled'] and (p.kind!='extension' or p.id in settings['enabledExtensions']) and (p.kind not in ('copilot','kimi') or p.id in settings['enabledExtras'])
 
 def demo_snapshot(providers,settings,cache_root):
     values={'claude':[73,7],'codex':[21,9],'cursor':[52,28],'gemini':[35,18],'glm':[12,8],'grok':[8],'opencode':[32,10,4]}
@@ -177,7 +179,7 @@ def demo_snapshot(providers,settings,cache_root):
     return dict(version=__version__,settings=settings,providers=out,widgets=demo_widgets,generatedAt=now)
 
 def source_name(p):
-    return {'copilot':'GitHub Copilot local OAuth login', 'kimi':'Kimi config or OpenCode coding-plan key', 'claude':'Claude Code OAuth · '+str(p.path/'.credentials.json'),'codex':'Codex sign-in · '+str(p.path/'auth.json'),'cursor':'Cursor signed-in SQLite session','gemini':'Antigravity IDE or `agy` CLI sign-in','glm':'Z.ai key borrowed from Claude Code, OpenCode, or ZCode','grok':'Grok CLI session · '+str(p.path),'opencode':'OpenCode Go key · '+str(p.path)}[p.kind]
+    return {'extension':'Local opt-in quota program', 'copilot':'GitHub Copilot local OAuth login', 'kimi':'Kimi config or OpenCode coding-plan key', 'claude':'Claude Code OAuth · '+str(p.path/'.credentials.json'),'codex':'Codex sign-in · '+str(p.path/'auth.json'),'cursor':'Cursor signed-in SQLite session','gemini':'Antigravity IDE or `agy` CLI sign-in','glm':'Z.ai key borrowed from Claude Code, OpenCode, or ZCode','grok':'Grok CLI session · '+str(p.path),'opencode':'OpenCode Go key · '+str(p.path)}[p.kind]
 
 def local_state(p,old,settings,home,config,data,force=None):
     """Everything that cannot block: enablement, detection, running sessions.

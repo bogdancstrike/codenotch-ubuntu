@@ -369,3 +369,7 @@ install, and their credential files are not read until enabled.
 Both parsers are fixture-tested. A live account check is still required for your login.
 Protocol references: [Copilot](https://github.com/qunqin24/Pulse/blob/0dd51fb/Sources/Pulse/Providers/CopilotUsageService.swift),
 [Kimi](https://github.com/qunqin24/Pulse/blob/0dd51fb/Docs/providers/kimi-code.md).
+
+Custom quota adapters can be installed without changing CodeNotch. See
+[the versioned program contract](docs/custom-providers.md). They are disabled until
+you enable them in Connections, and execute only in the bounded Python worker.

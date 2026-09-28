@@ -133,6 +133,7 @@ export default class CodenotchPreferences extends ExtensionPreferences {
         this._error.set_subtitle('Disabled AIs are never polled. No tokens are copied or refreshed.');
         for(const p of data.providers)this._addProviderRow(p);
 
+        this._fact(this._general,'Custom quota programs','Install a codenotch-extension.json and executable in ~/.local/share/codenotch/extensions/NAME, then reopen Settings. Each program starts disabled.');
         const profiles=new Adw.ExpanderRow({title:'Add an account profile',subtitle:'Use a folder already signed in with Claude Code, Codex or Grok.'});this._integrations.add(profiles);
         const kind=new Adw.ComboRow({title:'Provider',model:Gtk.StringList.new(['Claude Code','Codex','Grok'])});profiles.add_row(kind);
         const profileName=new Adw.EntryRow({title:'Label'});profiles.add_row(profileName);
