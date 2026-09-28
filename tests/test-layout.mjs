@@ -120,3 +120,10 @@ const accounts=[{...quotas,enabled:true},{id:'claude',enabled:false,windows:[{fr
 assert.equal(panelAccount(accounts).id,'codex');
 assert.equal(panelAccount(accounts,{panelAccount:'claude'}).id,'codex');
 assert.equal(panelAccount([]),null);
+
+const {forecast}=await import('../extension/usage.js');
+assert.equal(forecast({fraction:.1,resetsAt:1000,windowSeconds:1000},500),'Estimated to last until reset');
+assert.match(forecast({fraction:.9,resetsAt:1000,windowSeconds:1000},500),/May run out in/);
+assert.equal(forecast({fraction:.9,resetsAt:1000,windowSeconds:1000},1),null);
+assert.equal(forecast({fraction:.9,resetsAt:1000},500),null);
+assert.equal(cardLayout({status:'stale',windows:[{fraction:.9,resetsAt:Date.now()/1000+500,windowSeconds:1000}]},650,{forecast:true}).forecasts[0],null);

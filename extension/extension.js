@@ -122,7 +122,7 @@ export default class Codenotch extends Extension {
         const rings=this._providers.map(p=>`${p.id}:${p.status}:${headline(p,this._settings)?.fraction??''}:${(p.sessions??[]).map(s=>s.state).join('')}`).join('|');
         const cells=this._widgets.map(k=>`${k}:${JSON.stringify(this._widgetData[k]??null)}`).join('|');
         const look=[this._settings.edge,this._settings.scale,this._settings.textContrast,
-            this._settings.quotaDisplay,this._settings.windowClock,this._settings.clock24,this._settings.clockSeconds,this._settings.dateStyle,this._settings.peek].join(',');
+            this._settings.forecast,this._settings.quotaDisplay,this._settings.windowClock,this._settings.clock24,this._settings.clockSeconds,this._settings.dateStyle,this._settings.peek].join(',');
         return `${rings}#${cells}#${look}`;
     }
     // A poll that changes nothing should cost nothing: no repaint, no cairo.
@@ -356,7 +356,7 @@ export default class Codenotch extends Extension {
         this._hover=hit;
         const s=this._scale,g=this._g,edge=this._settings.edge,a=this._work;
         const height=hit.kind==='provider'
-            ? cardLayout(this._providers[hit.index],this._cardBudget).height
+            ? cardLayout(this._providers[hit.index],this._cardBudget,this._settings).height
             : widgetCardLayout(widgetCard(hit.ref,this._widgetData[hit.ref],this._settings)).height;
         const cw=D.cardWidth*s,ch=height*s;
         const [px,py]=point(g,edge,g.cells[hit.index].center,g.depth/2);

@@ -341,3 +341,7 @@ readings, without extra requests. Configure it under Appearance.
 Connections → Copy report copies the same report. It excludes account labels, paths,
 project/session data and credentials, and separates the latest check from the last
 successful reading. Antigravity records its local/CLI/cloud fallback outcomes.
+
+Optional forecasts in Appearance estimate whether a quota lasts until reset, using
+its average consumption since the reported window began. They require an explicit
+duration, stay hidden for stale/early windows, and show an ETA only within two hours.

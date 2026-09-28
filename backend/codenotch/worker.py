@@ -29,7 +29,7 @@ DEFAULTS=dict(
     clock24=True,clockSeconds=False,dateStyle='medium',
     weatherPlace='',weatherLat=None,weatherLon=None,weatherUnits='metric',
     textContrast='high',pinnedWindows={},
-    quotaDisplay='used',windowClock=False,panelUsage=True,panelAccount='',
+    forecast=False,quotaDisplay='used',windowClock=False,panelUsage=True,panelAccount='',
     notifyQuota=False,notifyReset=False,notifyFailures=False,notifyThreshold=90,
 )
 EDGES=('right','left','top','bottom')
@@ -118,7 +118,7 @@ def configuration(config):
     if not isinstance(out['panelAccount'],str): out['panelAccount']=''
     if out['quotaDisplay'] not in ('used','remaining'): out['quotaDisplay']='used'
     if out['notifyThreshold'] not in (75,80,90,95): out['notifyThreshold']=90
-    for key in ('panelUsage','windowClock','notifyQuota','notifyReset','notifyFailures','demo','panelIcon','hideFullscreen','peek','clock24','clockSeconds'):
+    for key in ('forecast','panelUsage','windowClock','notifyQuota','notifyReset','notifyFailures','demo','panelIcon','hideFullscreen','peek','clock24','clockSeconds'):
         out[key]=bool(out[key])
     return out
 

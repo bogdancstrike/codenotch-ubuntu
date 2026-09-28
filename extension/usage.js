@@ -26,3 +26,15 @@ export function panelAccount(providers, settings={}) {
     return enabled.find(p=>p.id===settings.panelAccount)??enabled.reduce((best,p)=>
         !best||headline(p,settings).fraction>headline(best,settings).fraction?p:best,null);
 }
+
+export function forecast(window, now=Date.now()/1000) {
+    const elapsed=elapsedWindow(window,now),used=window?.fraction;
+    if(elapsed===null||elapsed<.03||!Number.isFinite(used)||used<0)return null;
+    if(used>=1)return 'Allowance exhausted';
+    if(used===0)return 'Estimated to last until reset';
+    const elapsedSeconds=window.windowSeconds*elapsed;
+    const secondsLeft=(1-used)*elapsedSeconds/used;
+    if(secondsLeft>=window.resetsAt-now)return 'Estimated to last until reset';
+    if(secondsLeft<=7200)return `May run out in ~${Math.max(1,Math.round(secondsLeft/60))} min`;
+    return 'May run out before reset';
+}

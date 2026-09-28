@@ -1,7 +1,7 @@
 // Geometry and palette ported from vinzdg/codenotch (MIT, Copyright 2026 Vinz).
 // Pure drawing module; used unchanged by GNOME and the screenshot harness.
 import {GLYPHS} from './glyphs.js';
-import {headline,percentText,elapsedWindow} from './usage.js';
+import {headline,percentText,elapsedWindow,forecast} from './usage.js';
 
 export const PX=44/117;
 export const D={
@@ -346,18 +346,19 @@ function wrap(s,width=34){const words=String(s).split(/\s+/);const lines=[];let 
 const C={header:D.cardGlyph+18,note:18,window:58,rule:20,session:44,more:22,
     title:16.5,label:14,reset:12,percent:13.5,note_:12.5,name:13.5,state:12,detail:12,bar:6};
 
-export function cardLayout(p,maxHeight=650) {
+export function cardLayout(p,maxHeight=650,settings={}) {
     const windows=(p.windows??[]).slice(0,8),notes=['ok'].includes(p.status)?[]:wrap(p.message??'No usage available.',34);
     if(p.status==='stale'&&p.updatedAt)notes.push(`Last reading: ${Math.max(0,Math.floor((Date.now()/1000-p.updatedAt)/60))} min ago`);
-    const base=2*D.cardPad+C.header+notes.length*C.note+windows.length*C.window;
+    const forecasts=settings.forecast&&p.status==='ok'?windows.map(w=>forecast(w)):windows.map(()=>null);
+    const base=2*D.cardPad+C.header+notes.length*C.note+windows.length*C.window+forecasts.filter(Boolean).length*20;
     const cap=Math.max(0,Math.min(12,Math.floor((maxHeight-base-C.rule)/C.session)));
     const sessions=(p.sessions??[]).slice(0,cap);
     const overflow=(p.sessions?.length??0)>sessions.length;
-    return {windows,notes,sessions,overflow,
+    return {windows,notes,sessions,overflow,forecasts,
         height:base+(sessions.length?C.rule+sessions.length*C.session:0)+(overflow?C.more:0)};
 }
 export function drawCard(cr,p,width=D.cardWidth,maxHeight=650,settings={}) {
-    const l=cardLayout(p,maxHeight),pad=D.cardPad,inner=width-2*pad;
+    const l=cardLayout(p,maxHeight,settings),pad=D.cardPad,inner=width-2*pad;
     const muted=tone(settings,'muted'),dim=tone(settings,'dim');
     roundRect(cr,0,0,width,l.height,D.cardCorner);color(cr,P.shell);cr.fill();
     color(cr,P.line,.6);cr.setLineWidth(1);roundRect(cr,.5,.5,width-1,l.height-1,D.cardCorner);cr.stroke();
@@ -377,6 +378,8 @@ export function drawCard(cr,p,width=D.cardWidth,maxHeight=650,settings={}) {
         y+=C.bar+15;
         text(cr,Number.isFinite(w.fraction)?percentText(w.fraction,settings,true):'No reading',pad,y,C.percent,P.white,'left',W.semi);
         y+=C.window-21-C.bar-15;
+        const prediction=l.forecasts[l.windows.indexOf(w)];
+        if(prediction){text(cr,prediction,pad,y-2,11,muted);y+=20;}
     }
     if(l.sessions.length){cr.newPath();cr.moveTo(pad,y+2);cr.lineTo(width-pad,y+2);color(cr,P.line);cr.setLineWidth(1);cr.stroke();y+=C.rule;}
     for(const s of l.sessions){
