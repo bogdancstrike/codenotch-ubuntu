@@ -17,6 +17,7 @@ from .model import ProviderError
 from .providers import read_json, discover, detected
 from .activity import sessions
 from . import widgets as widget_module
+from .alerts import evaluate as evaluate_alerts
 
 DEFAULTS=dict(
     edge='right',visibility='hover',scale=1.0,monitor=-1,disabled=[],demo=False,
@@ -27,6 +28,7 @@ DEFAULTS=dict(
     clock24=True,clockSeconds=False,dateStyle='medium',
     weatherPlace='',weatherLat=None,weatherLon=None,weatherUnits='metric',
     textContrast='high',pinnedWindows={},
+    notifyQuota=False,notifyReset=False,notifyFailures=False,notifyThreshold=90,
 )
 EDGES=('right','left','top','bottom')
 VISIBILITIES=('hover','always','hidden')
@@ -111,7 +113,8 @@ def configuration(config):
     if out['weatherLat'] is None or out['weatherLon'] is None:
         out['weatherLat']=out['weatherLon']=None; out['weatherPlace']=''
     out['weatherPlace']=str(out['weatherPlace'])[:120] if isinstance(out['weatherPlace'],str) else ''
-    for key in ('demo','panelIcon','hideFullscreen','peek','clock24','clockSeconds'):
+    if out['notifyThreshold'] not in (75,80,90,95): out['notifyThreshold']=90
+    for key in ('notifyQuota','notifyReset','notifyFailures','demo','panelIcon','hideFullscreen','peek','clock24','clockSeconds'):
         out[key]=bool(out[key])
     return out
 
@@ -220,6 +223,13 @@ def collect(args):
     widget_cache=read_json(root/'widgets.json')
     # Status/info never performs HTTP. Explicit verification or scheduled
     # snapshot polling does; all jobs are outside GNOME Shell's main thread.
+    if getattr(args,'ack_alerts',None):
+        with Lock(root/'poll.lock'):
+            memory=read_json(root/'alerts.json')
+            ids=set(args.ack_alerts.split(','))
+            memory['pending']=[e for e in memory.get('pending',[]) if e['id'] not in ids]
+            atomic_json(root/'alerts.json',memory)
+        return info_snapshot(providers,settings,old,widget_cache)
     if args.info:
         return info_snapshot(providers,settings,old,widget_cache)
     with Lock(root/'poll.lock',blocking=False) as poll:
@@ -244,7 +254,12 @@ def collect(args):
                 current=widget_job.result()
         else:
             current=safe_widgets(settings,widget_cache,force_widgets)
-        snapshot=dict(version=__version__,settings=settings,providers=rows,widgets=current,generatedAt=time.time())
+        alert_path=root/'alerts.json'
+        memory=read_json(alert_path)
+        if any(settings.get(k) for k in ('notifyQuota','notifyReset','notifyFailures')) or memory:
+            memory=evaluate_alerts(rows,settings,memory,time.time())
+            atomic_json(alert_path,memory)
+        snapshot=dict(version=__version__,settings=settings,providers=rows,widgets=current,generatedAt=time.time(),alerts=memory.get('pending',[]))
         with Lock(root/'settings.lock'):
             atomic_json(root/'usage.json',snapshot)
             atomic_json(root/'widgets.json',{**widget_cache,'current':current})
@@ -258,6 +273,7 @@ def safe_widgets(settings,cache,force):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--ack-alerts',help='Acknowledge delivered alert IDs')
     parser.add_argument('--snapshot',action='store_true'); parser.add_argument('--demo',action='store_true')
     parser.add_argument('--info',action='store_true'); parser.add_argument('--verify',metavar='PROVIDER',help='Provider ID or all; respects Retry-After')
     parser.add_argument('--set',nargs=2,metavar=('KEY','JSON'))

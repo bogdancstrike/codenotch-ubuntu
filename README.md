@@ -316,3 +316,7 @@ official upstream release.
 
 Each account's ring shows its most-used quota window. Pin a specific window under
 Settings → Connections → account → Ring shows. Missing pins fall back to automatic.
+
+Notifications are opt-in under Connections. Choose a 75/80/90/95% warning,
+reset alerts for previously warned windows, and repeated connection failures.
+Delivery state survives restarts; stale readings never trigger quota alerts.

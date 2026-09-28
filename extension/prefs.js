@@ -136,6 +136,11 @@ export default class CodenotchPreferences extends ExtensionPreferences {
         const verifyAll=new Gtk.Button({label:'Verify all',valign:Gtk.Align.CENTER});verify.add_suffix(verifyAll);
         this._general.add(verify);verifyAll.connect('clicked',()=>this._run(['--verify','all']));
 
+        this._toggle(this._general,'Quota notifications','Warn once per window at the threshold and when exhausted.',s.notifyQuota,v=>this._set('notifyQuota',v));
+        this._combo(this._general,'Warning threshold','Percentage used',['75%','80%','90%','95%'],[75,80,90,95],s.notifyThreshold,v=>this._set('notifyThreshold',v));
+        this._toggle(this._general,'Reset notifications','Notify when a previously warned window becomes available.',s.notifyReset,v=>this._set('notifyReset',v));
+        this._toggle(this._general,'Connection notifications','Warn after three failed usage checks.',s.notifyFailures,v=>this._set('notifyFailures',v));
+
         // ------------------------------------------------------------ widgets
         this._widgetSwitches=new Map();
         for(const [id,title,subtitle] of WIDGETS){

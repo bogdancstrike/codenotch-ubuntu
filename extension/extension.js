@@ -42,7 +42,7 @@ function pangoMeasure(cr,value,size,weight) {
 export default class Codenotch extends Extension {
     enable() {
         this._alive=true;this._sources=new Set();this._signals=[];this._jobs=new Set();this._queued=[];
-        this._snapshot=null;this._providers=[];this._widgets=[];this._widgetData={};
+        this._deliveredAlerts=new Set();this._snapshot=null;this._providers=[];this._widgets=[];this._widgetData={};
         this._expanded=false;this._progress=0;this._velocity=0;this._target=0;this._hover=null;this._menuRows=new Map();
         // Safe defaults so a repaint before the first layout cannot throw.
         this._scale=1;this._folded=true;this._cardBudget=400;
@@ -428,6 +428,15 @@ export default class Codenotch extends Extension {
     }
     _showError(message){if(this._statusItem)this._statusItem.label.text=message;}
     _accept(data) {
+        const ack=[];
+        for(const event of data.alerts??[]){
+            if(!this._deliveredAlerts.has(event.id)){
+                Main.notify(`Codenotch · ${event.title}`,event.message);
+                this._deliveredAlerts.add(event.id);
+            }
+            ack.push(event.id);
+        }
+        if(ack.length)this._queued.push(['--ack-alerts',ack.join(',')]);
         const before=JSON.stringify(this._settings);
         const oldIDs=this._snapshot?.providers?.map(p=>p.id).join('|');
         this._snapshot=data;this._settings={...DEFAULTS,...data.settings};
@@ -543,7 +552,7 @@ export default class Codenotch extends Extension {
         for(const actor of [this._notch,this._hotspot,this._anchor,this._card,this._tail])
             if(actor){actor.remove_all_transitions?.();Main.layoutManager.removeChrome(actor);actor.destroy();}
         this._notch=this._hotspot=this._anchor=this._card=this._tail=null;
-        this._menu=null;this._snapshot=null;this._queued=[];this._menuRows?.clear();
+        this._menu=null;this._deliveredAlerts=new Set();this._snapshot=null;this._queued=[];this._menuRows?.clear();
         setTextEngine(null);
     }
 }
