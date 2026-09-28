@@ -105,3 +105,12 @@ assert.equal(headline(quotas,{pinnedWindows:{codex:'session'}}).id,'session');
 assert.equal(headline(quotas,{pinnedWindows:{claude:'session',codex:'removed'}}).id,'weekly');
 assert.equal(headline({windows:[{fraction:NaN},{fraction:-1}]}),null);
 assert.equal(headline({}),null);
+
+const {percentText,elapsedWindow}=await import('../extension/usage.js');
+assert.equal(percentText(.25,{quotaDisplay:'remaining'},true),'75% left');
+assert.equal(percentText(.996,{},true),'99% used');
+assert.equal(percentText(1.2,{quotaDisplay:'remaining'}),'0%');
+assert.equal(elapsedWindow({resetsAt:200,windowSeconds:200},100),.5);
+assert.equal(elapsedWindow({resetsAt:200},100),null);
+assert.equal(elapsedWindow({resetsAt:200,windowSeconds:200},201),null);
+assert.equal(band(.95),P.red);assert.equal(band(1),P.exhausted);

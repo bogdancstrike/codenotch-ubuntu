@@ -22,11 +22,13 @@ def timestamp(value):
             pass
     return None
 
-def window(id, label, percent, reset=None):
+def window(id, label, percent, reset=None, duration=None):
     n = number(percent)
     if n is None or n < 0:
         raise ProviderError('error', 'The provider returned an invalid usage percentage.')
-    return dict(id=id, label=label, fraction=n / 100, resetsAt=timestamp(reset))
+    out=dict(id=id, label=label, fraction=n / 100, resetsAt=timestamp(reset))
+    if number(duration) is not None and duration > 0: out['windowSeconds']=duration
+    return out
 
 def require(windows):
     if not windows:
@@ -63,7 +65,7 @@ def codex(data, now):
         reset=timestamp(row.get('reset_at'))
         if reset is None and number(row.get('reset_after_seconds')) is not None:
             reset=now+row['reset_after_seconds']
-        out.append(window(key,duration_label(row.get('limit_window_seconds'),fallback),row.get('used_percent'),reset))
+        out.append(window(key,duration_label(row.get('limit_window_seconds'),fallback),row.get('used_percent'),reset,row.get('limit_window_seconds')))
     return require(out)
 
 def cursor(data, now):

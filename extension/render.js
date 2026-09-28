@@ -1,7 +1,7 @@
 // Geometry and palette ported from vinzdg/codenotch (MIT, Copyright 2026 Vinz).
 // Pure drawing module; used unchanged by GNOME and the screenshot harness.
 import {GLYPHS} from './glyphs.js';
-import {headline} from './usage.js';
+import {headline,percentText,elapsedWindow} from './usage.js';
 
 export const PX=44/117;
 export const D={
@@ -15,7 +15,7 @@ export const D={
 export const W={regular:400,medium:500,semi:600,bold:700};
 export const P={
     black:'#000000',shell:'#0A0A0A',track:'#333333',bar:'#2D2D2D',line:'#3A3A3A',
-    green:'#00FF88',yellow:'#F2FF00',orange:'#FF3F00',amber:'#FFBC4A',
+    green:'#00FF88',yellow:'#F2FF00',orange:'#FF6B35',red:'#FF334F',exhausted:'#C81939',amber:'#FFBC4A',
     white:'#FFFFFF',dim:'#C8CCD0',muted:'#9AA0A6',faint:'#6E7378',
 };
 // Readability: the muted tones lift together instead of every call site guessing.
@@ -24,7 +24,7 @@ export const CONTRAST={normal:{dim:'#B4B4B4',muted:'#8A8A8A',faint:'#606060'},
     higher:{dim:'#F2F4F6',muted:'#C6CBD1',faint:'#93999F'}};
 export function tone(settings,name){return (CONTRAST[settings?.textContrast]??CONTRAST.high)[name]??P[name];}
 
-export function band(f) {return f<.5?P.green:f<.7?P.yellow:P.orange;}
+export function band(f) {return f<.5?P.green:f<.7?P.yellow:f<.9?P.orange:f<1?P.red:P.exhausted;}
 export function color(cr,hex,alpha=1) {const n=parseInt(hex.slice(1),16);cr.setSourceRGBA((n>>16&255)/255,(n>>8&255)/255,(n&255)/255,alpha);}
 
 // ---------------------------------------------------------------- typography
@@ -271,14 +271,16 @@ export function drawWidget(cr,kind,data,settings,g,edge,cell,alpha,now=new Date(
 
 // -------------------------------------------------------------------- rings
 export function ring(cr,p,cx,cy,phase=0,alpha=1,settings={}) {
-    const f=headline(p,settings)?.fraction;
+    const selected=headline(p,settings),f=selected?.fraction;
     const stale=!['ok','demo'].includes(p.status);
     cr.setLineCap(1);cr.newPath();cr.arc(cx,cy,(D.ring-D.track)/2,0,Math.PI*2);color(cr,P.track,alpha);cr.setLineWidth(D.track);cr.stroke();
     if(Number.isFinite(f)&&f>0){cr.newPath();cr.arc(cx,cy,(D.ring-D.track)/2,-Math.PI/2,-Math.PI/2+Math.PI*2*Math.min(1,f));color(cr,band(f),alpha*(stale?.4:1));cr.setLineWidth(D.stroke);cr.stroke();}
+    const elapsed=settings.windowClock?elapsedWindow(selected):null;
+    if(elapsed!==null){cr.newPath();cr.arc(cx,cy,D.ring/2+3,-Math.PI/2,-Math.PI/2+2*Math.PI*elapsed);color(cr,tone(settings,'muted'),alpha*.7);cr.setLineWidth(1.5);cr.stroke();}
     const activity=p.sessions?.find(s=>s.state==='waiting')??p.sessions?.find(s=>s.state==='busy');
     if(activity){const busy=activity.state==='busy';cr.newPath();cr.arc(cx,cy,72*PX/2,busy?phase:0,(busy?phase:0)+Math.PI*(busy?1.5:2));color(cr,busy?P.green:P.amber,alpha*(busy?1:.6+.4*Math.sin(phase)));cr.setLineWidth(5.5*PX);cr.stroke();}
     glyph(cr,p.glyph,cx,cy,D.glyph,alpha);
-    const label=Number.isFinite(f)?`${Math.round(f*100)}%`:'—';
+    const label=percentText(f,settings);
     text(cr,label,cx,cy+D.ring/2+D.gap+13,15,stale?tone(settings,'muted'):P.white,'center',W.semi,{alpha,tracking:-.2});
 }
 
@@ -373,7 +375,7 @@ export function drawCard(cr,p,width=D.cardWidth,maxHeight=650,settings={}) {
         roundRect(cr,pad,y,inner,C.bar,C.bar/2);color(cr,P.bar);cr.fill();
         if(Number.isFinite(w.fraction)&&w.fraction>0){roundRect(cr,pad,y,inner*Math.min(1,w.fraction),C.bar,C.bar/2);color(cr,band(w.fraction));cr.fill();}
         y+=C.bar+15;
-        text(cr,Number.isFinite(w.fraction)?`${Math.round(w.fraction*100)}% used`:'No reading',pad,y,C.percent,P.white,'left',W.semi);
+        text(cr,Number.isFinite(w.fraction)?percentText(w.fraction,settings,true):'No reading',pad,y,C.percent,P.white,'left',W.semi);
         y+=C.window-21-C.bar-15;
     }
     if(l.sessions.length){cr.newPath();cr.moveTo(pad,y+2);cr.lineTo(width-pad,y+2);color(cr,P.line);cr.setLineWidth(1);cr.stroke();y+=C.rule;}

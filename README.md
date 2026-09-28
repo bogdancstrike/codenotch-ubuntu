@@ -328,3 +328,7 @@ provider retry deadlines still apply. Stale hover cards show the reading's age.
 Codex activity follows turn start/completion and tool-call records from bounded
 transcript tails. Slow tools remain busy; finished turns stop immediately. Abandoned
 model turns time out after five minutes, tool waits after thirty minutes.
+
+Appearance includes used/remaining percentages and an optional window clock arc
+(only for provider-reported durations). Colors reflect usage in both modes: green,
+yellow, orange, red at 90%, and deep red when exhausted.

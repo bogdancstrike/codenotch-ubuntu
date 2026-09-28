@@ -12,7 +12,7 @@
 - [x] Notifications: `backend/codenotch/alerts.py`, worker, shell, preferences. Persist threshold/reset/outage transitions; only fresh readings can trigger quota events; acknowledgement prevents replay. Tests cover oscillation, restart and stale data.
 - [x] Cache expiry: `backend/codenotch/cache.py`, worker, renderer. Discard expired windows and readings older than 24 hours in both polling and cached status. Preserve retry deadlines. Tests cover partial expiry, offline reads and unknown timestamps.
 - [x] Activity: `backend/codenotch/activity.py` and tests. Read bounded Codex transcript tails for lifecycle events with a timeout for abandoned turns; support current state database discovery. Never expose transcript contents.
-- [ ] Presentation: used/remaining setting, critical/exhausted colors, optional window clock. Keep ring geometry and percentage semantics consistent. Retain only provider-reported durations. Node and parser tests.
+- [x] Presentation: used/remaining setting, critical/exhausted colors, optional window clock. Keep ring geometry and percentage semantics consistent. Retain only provider-reported durations. Node and parser tests.
 - [ ] Panel dashboard: selected/automatic account summary and per-account windows in the GNOME panel. Cache-only menu updates and disabled-account filtering. Test pure selection/formatting.
 - [ ] Diagnostics: allowlisted CLI report and preferences copy action, latest-check vs last-good distinction, bounded fallback attempt records. Verify reports exclude paths, labels, sessions and credentials.
 - [ ] Forecast: pure optional forecast from reported duration, fraction and reset; suppress early, expired and stale estimates. Test expected exhaustion and no-duration cases.

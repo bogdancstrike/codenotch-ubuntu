@@ -122,7 +122,7 @@ export default class Codenotch extends Extension {
         const rings=this._providers.map(p=>`${p.id}:${p.status}:${headline(p,this._settings)?.fraction??''}:${(p.sessions??[]).map(s=>s.state).join('')}`).join('|');
         const cells=this._widgets.map(k=>`${k}:${JSON.stringify(this._widgetData[k]??null)}`).join('|');
         const look=[this._settings.edge,this._settings.scale,this._settings.textContrast,
-            this._settings.clock24,this._settings.clockSeconds,this._settings.dateStyle,this._settings.peek].join(',');
+            this._settings.quotaDisplay,this._settings.windowClock,this._settings.clock24,this._settings.clockSeconds,this._settings.dateStyle,this._settings.peek].join(',');
         return `${rings}#${cells}#${look}`;
     }
     // A poll that changes nothing should cost nothing: no repaint, no cairo.

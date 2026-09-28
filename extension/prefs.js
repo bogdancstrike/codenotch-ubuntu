@@ -174,6 +174,9 @@ export default class CodenotchPreferences extends ExtensionPreferences {
         this._toggle(this._appearance,'Top panel icon','Keeps settings reachable when the notch is hidden.',s.panelIcon,v=>this._set('panelIcon',v));
         this._toggle(this._appearance,'Hide over fullscreen windows','Also hides in Activities and on the lock screen.',
             s.hideFullscreen,v=>this._set('hideFullscreen',v));
+        this._combo(this._appearance,'Quota percentage','Applies to the notch and panel. Colors always reflect usage.',
+            ['Used','Remaining'],['used','remaining'],s.quotaDisplay,v=>this._set('quotaDisplay',v));
+        this._toggle(this._appearance,'Window clock','Outer arc shows elapsed time when the provider reports a duration.',s.windowClock,v=>this._set('windowClock',v));
         this._combo(this._readability,'Text contrast','Lifts the secondary labels in the notch and its cards.',
             ['Standard','High (recommended)','Highest'],['normal','high','higher'],s.textContrast,v=>this._set('textContrast',v));
 
