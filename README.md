@@ -350,3 +350,22 @@ Additional Codex and Grok sign-ins in `~/.codex-NAME` and `~/.grok-NAME` are
 discovered alongside Claude profiles. Connections → Add an account profile accepts
 an existing absolute profile folder. Each account has its own label, pin, cache and
 enablement switch. CodeNotch never signs in or copies tokens on your behalf.
+
+
+### Additional providers (opt-in)
+
+Enable GitHub Copilot or Kimi Code in Connections. Both are off on upgrade and first
+install, and their credential files are not read until enabled.
+
+- **Copilot:** reads `oauth_token` for github.com from
+  `$XDG_CONFIG_HOME/github-copilot/hosts.json` or `apps.json`, created by supported
+  Copilot clients. The internal GitHub quota endpoint can change; a generic GitHub
+  PAT is not a guaranteed substitute for the client's OAuth login.
+- **Kimi Code:** reads a provider with `base_url` on `api.kimi.com` and `api_key` from
+  `~/.kimi/config.toml`, or OpenCode's `kimi-for-coding` / `kimi-code` key. OAuth-only
+  Kimi configurations are not supported by this adapter. Unknown duration units and
+  incomplete counters are omitted, never guessed.
+
+Both parsers are fixture-tested. A live account check is still required for your login.
+Protocol references: [Copilot](https://github.com/qunqin24/Pulse/blob/0dd51fb/Sources/Pulse/Providers/CopilotUsageService.swift),
+[Kimi](https://github.com/qunqin24/Pulse/blob/0dd51fb/Docs/providers/kimi-code.md).

@@ -42,7 +42,7 @@ def evaluate(rows, settings, memory, now):
             threshold=settings.get('notifyThreshold',90)/100
             step=100 if fraction >= 1 else settings.get('notifyThreshold',90) if fraction >= threshold else 0
             if step > warned and settings.get('notifyQuota'):
-                emit(row, f"{w['label']}: {'allowance exhausted' if step == 100 else str(int(fraction*100))+'% used'}.")
+                emit(row, f"{w['label']}: {'included allowance used (overage enabled)' if step == 100 and w.get('overageAllowed') else 'allowance exhausted' if step == 100 else str(int(fraction*100))+'% used'}.")
                 warned=step
             state['windows'][w['id']]={'fraction':fraction,'reset':reset,'warned':warned}
     return {'accounts':accounts,'pending':pending[-50:],'serial':serial}

@@ -29,7 +29,7 @@ DEFAULTS=dict(
     widgets=['clock','date'],
     clock24=True,clockSeconds=False,dateStyle='medium',
     weatherPlace='',weatherLat=None,weatherLon=None,weatherUnits='metric',
-    textContrast='high',pinnedWindows={},accountProfiles=[],accountLabels={},
+    textContrast='high',pinnedWindows={},accountProfiles=[],accountLabels={},enabledExtras=[],
     forecast=False,quotaDisplay='used',windowClock=False,panelUsage=True,panelAccount='',
     notifyQuota=False,notifyReset=False,notifyFailures=False,notifyThreshold=90,
 )
@@ -104,6 +104,7 @@ def configuration(config):
     if not isinstance(out['scale'],(int,float)) or not 0.75<=out['scale']<=2: out['scale']=1.0
     if not isinstance(out['monitor'],int): out['monitor']=-1
     out['widgets']=clamp_widgets(out['widgets'])
+    out['enabledExtras']=[x for x in out['enabledExtras'] if x in ('copilot','kimi')] if isinstance(out['enabledExtras'],list) else []
     out['accountProfiles']=clean_profiles(out['accountProfiles'])
     out['accountLabels']=clean_labels(out['accountLabels'])
     pins=out['pinnedWindows']
@@ -147,7 +148,9 @@ def apply_settings(args,config,root):
             changed=True
         if args.enable or args.disable:
             disabled=set(settings['disabled'])
-            if args.enable: disabled.discard(args.enable)
+            if args.enable:
+                disabled.discard(args.enable)
+                if args.enable in ('copilot','kimi') and args.enable not in settings['enabledExtras']: settings['enabledExtras'].append(args.enable)
             if args.disable: disabled.add(args.disable)
             settings['disabled']=sorted(disabled); changed=True
         if changed:
@@ -155,12 +158,15 @@ def apply_settings(args,config,root):
             settings=configuration(config)
         return settings
 
+def is_enabled(p,settings):
+    return p.id not in settings['disabled'] and (p.kind not in ('copilot','kimi') or p.id in settings['enabledExtras'])
+
 def demo_snapshot(providers,settings,cache_root):
     values={'claude':[73,7],'codex':[21,9],'cursor':[52,28],'gemini':[35,18],'glm':[12,8],'grok':[8],'opencode':[32,10,4]}
     now=time.time(); out=[]
     for p in providers:
-        enabled=p.id not in settings['disabled']
-        out.append({**p.meta(),'enabled':enabled,'detected':True,'status':'demo' if enabled else 'disabled','message':'Sample data — no credentials read or network requests made.','updatedAt':now,'source':source_name(p),'windows':[dict(id=str(i),label='Current session' if i==0 else 'All models' if i==1 else 'Monthly limit',fraction=n/100,resetsAt=now+(3060 if i==0 else 172800)) for i,n in enumerate(values[p.kind])] if enabled else [],'sessions':[dict(name='scraper-manager',detail='Terminal · ~/projects/scraper-manager',state='busy',since=now-125,derived=False)] if p.kind=='claude' and enabled else []})
+        enabled=is_enabled(p,settings)
+        out.append({**p.meta(),'enabled':enabled,'detected':True,'status':'demo' if enabled else 'disabled','message':'Sample data — no credentials read or network requests made.','updatedAt':now,'source':source_name(p),'windows':[dict(id=str(i),label='Current session' if i==0 else 'All models' if i==1 else 'Monthly limit',fraction=n/100,resetsAt=now+(3060 if i==0 else 172800)) for i,n in enumerate(values.get(p.kind,[25,40]))] if enabled else [],'sessions':[dict(name='scraper-manager',detail='Terminal · ~/projects/scraper-manager',state='busy',since=now-125,derived=False)] if p.kind=='claude' and enabled else []})
     demo_widgets={}
     if 'weather' in settings['widgets']:
         demo_widgets['weather']=dict(temp=21,feels=20,high=24,low=13,humidity=48,wind=9,code=2,text='Partly cloudy',symbol='partly',unit='C',windUnit='km/h',place=settings['weatherPlace'] or 'Sample city',updatedAt=now,status='ok',message='')
@@ -171,14 +177,14 @@ def demo_snapshot(providers,settings,cache_root):
     return dict(version=__version__,settings=settings,providers=out,widgets=demo_widgets,generatedAt=now)
 
 def source_name(p):
-    return {'claude':'Claude Code OAuth · '+str(p.path/'.credentials.json'),'codex':'Codex sign-in · '+str(p.path/'auth.json'),'cursor':'Cursor signed-in SQLite session','gemini':'Antigravity IDE or `agy` CLI sign-in','glm':'Z.ai key borrowed from Claude Code, OpenCode, or ZCode','grok':'Grok CLI session · '+str(p.path),'opencode':'OpenCode Go key · '+str(p.path)}[p.kind]
+    return {'copilot':'GitHub Copilot local OAuth login', 'kimi':'Kimi config or OpenCode coding-plan key', 'claude':'Claude Code OAuth · '+str(p.path/'.credentials.json'),'codex':'Codex sign-in · '+str(p.path/'auth.json'),'cursor':'Cursor signed-in SQLite session','gemini':'Antigravity IDE or `agy` CLI sign-in','glm':'Z.ai key borrowed from Claude Code, OpenCode, or ZCode','grok':'Grok CLI session · '+str(p.path),'opencode':'OpenCode Go key · '+str(p.path)}[p.kind]
 
 def local_state(p,old,settings,home,config,data,force=None):
     """Everything that cannot block: enablement, detection, running sessions.
 
     Returns (row, needs_fetch). Runs serially, so a snapshot with nothing due
     never creates a thread pool."""
-    now=time.time(); old=current_reading(old,now); meta={**p.meta(),'source':source_name(p),'enabled':p.id not in settings['disabled']}
+    now=time.time(); old=current_reading(old,now); meta={**p.meta(),'source':source_name(p),'enabled':is_enabled(p,settings)}
     # This is before detection: disabled providers' credentials are never inspected.
     if not meta['enabled']:
         return {**meta,'status':'disabled','detected':False,'windows':[],'sessions':[],'message':'Disconnected here. The owning tool remains signed in.'},False
@@ -218,7 +224,7 @@ def update_provider(p,old,settings,home,config,data,force=None):
 
 def info_snapshot(providers,settings,old,widget_cache):
     return dict(version=__version__,settings=settings,widgets=widget_cache.get('current',{}),providers=[
-        {**p.meta(),'enabled':p.id not in settings['disabled'],'source':source_name(p),
+        {**p.meta(),'enabled':is_enabled(p,settings),'source':source_name(p),
          **{k:v for k,v in current_reading(old.get(p.id,{}),time.time()).items() if k not in ('source','enabled')}} for p in providers])
 
 def collect(args):

@@ -67,7 +67,8 @@ export function roundRect(cr,x,y,w,h,r) {
 }
 export function glyph(cr,name,cx,cy,size=D.glyph,alpha=1) {
     const scale={claude:.97,cursor:.97,openai:.94,glm:.95,opencode:.95}[name]??1;size*=scale;
-    const loops=GLYPHS[name]??GLYPHS.claude;
+    if(!GLYPHS[name]){text(cr,({copilot:'GH',kimi:'K',extension:'+'})[name]??'AI',cx,cy+size*.32,size*.8,P.white,'center',W.bold,{alpha});return;}
+    const loops=GLYPHS[name];
     cr.newPath();for(const loop of loops) {loop.forEach(([x,y],i)=>{const a=cx+(x-.5)*size,b=cy+(y-.5)*size;i?cr.lineTo(a,b):cr.moveTo(a,b);});cr.closePath();}
     color(cr,P.white,alpha);cr.setFillRule(1);cr.fill();cr.setFillRule(0);
 }

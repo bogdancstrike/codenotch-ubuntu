@@ -147,6 +147,14 @@ class Provider:
             url='https://cli-chat-proxy.grok.com/v1/billing?format=credits'
         elif self.kind=='opencode':
             token=pick_key(read_json(self.path).get('opencode-go')); url='https://opencode.ai/zen/go/v1/usage'
+        elif self.kind in ('copilot','kimi'):
+            from .extra_providers import copilot_token, kimi_token, copilot, kimi
+            token=copilot_token(config) if self.kind=='copilot' else kimi_token(home,data)
+            if not token: auth_error()
+            if self.kind=='copilot':
+                headers={'Authorization':'token '+token,'X-Github-Api-Version':'2025-04-01','Editor-Version':'vscode/1.96.2','Editor-Plugin-Version':'copilot-chat/0.26.7'}
+                return copilot(request_json('https://api.github.com/copilot_internal/user',headers),time.time())
+            return kimi(request_json('https://api.kimi.com/coding/v1/usages',{'Authorization':'Bearer '+token}),time.time())
         elif self.kind=='gemini':
             return antigravity_quota(home,config,self.attempts)
         else: raise ProviderError('error','Unknown provider.')
@@ -193,6 +201,8 @@ def discover(home,config,data,settings=None):
         Provider('glm','GLM','glm',home),
         Provider('grok','Grok','grok',home/'.grok/auth.json'),
         Provider('opencode','OpenCode','opencode',data/'opencode/auth.json'),
+        Provider('copilot','GitHub Copilot','copilot',config/'github-copilot'),
+        Provider('kimi','Kimi Code','kimi',home/'.kimi'),
     ])
     for kind in ('codex','grok'):
         for directory in sorted(home.glob('.'+kind+'-*')):
@@ -211,6 +221,8 @@ def discover(home,config,data,settings=None):
 def detected(provider,home,config,data):
     if provider.kind=='claude': return (provider.path/'.credentials.json').is_file()
     if provider.kind=='codex': return (provider.path/'auth.json').is_file()
+    if provider.kind=='copilot': return any((config/'github-copilot'/name).is_file() for name in ('hosts.json','apps.json'))
+    if provider.kind=='kimi': return (home/'.kimi/config.toml').is_file() or (data/'opencode/auth.json').is_file()
     if provider.kind=='glm': return bool(glm_key(home,config,data))
     if provider.kind=='gemini': return antigravity_signed_in(home,config)
     return provider.path.exists()
