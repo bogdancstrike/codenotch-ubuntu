@@ -324,3 +324,7 @@ Delivery state survives restarts; stale readings never trigger quota alerts.
 Cached quota windows expire at their reported reset time. Readings without a reset
 are retained for at most 24 hours. Expired data is shown as awaiting a fresh reading;
 provider retry deadlines still apply. Stale hover cards show the reading's age.
+
+Codex activity follows turn start/completion and tool-call records from bounded
+transcript tails. Slow tools remain busy; finished turns stop immediately. Abandoned
+model turns time out after five minutes, tool waits after thirty minutes.

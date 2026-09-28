@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 from .providers import read_json, sqlite_rows
 from .model import timestamp
+from .turns import codex_turn
 
 def home_short(text):
     """~/project reads better than /home/name/project in a narrow card."""
@@ -28,12 +29,17 @@ def sessions(provider):
             state='waiting' if row.get('tempo')=='blocked' or row.get('status')=='waiting' else 'busy' if row.get('tempo')=='active' or row.get('status')=='busy' else 'idle'
             out.append(dict(name=str(row.get('name') or Path(cwd).name),detail=home_short(row.get('waitingFor') or row.get('needs') or cwd),state=state,since=timestamp(row.get('statusUpdatedAt') or row.get('updatedAt')) or now,derived=False))
     elif provider.kind=='codex':
-        paths=sqlite_rows(provider.path/'state_5.sqlite','SELECT rollout_path FROM threads WHERE archived = 0 ORDER BY updated_at_ms DESC LIMIT 8')
+        databases=sorted(provider.path.glob('state_*.sqlite'),key=lambda p:int(p.stem.split('_')[-1]) if p.stem.split('_')[-1].isdigit() else -1,reverse=True)
+        paths=[]
+        for database in databases[:3]:
+            paths=sqlite_rows(database,'SELECT rollout_path FROM threads WHERE archived = 0 ORDER BY updated_at_ms DESC LIMIT 8')
+            if not paths:
+                paths=sqlite_rows(database,'SELECT rollout_path FROM threads WHERE archived = 0 ORDER BY updated_at DESC LIMIT 8')
+            if paths: break
         for (path,) in paths:
-            try:
-                stamp=Path(path).expanduser().stat().st_mtime
-                if 0<=now-stamp<=8: out.append(dict(name='Codex',detail='Recent rollout writes · inferred activity',state='busy',since=stamp,derived=True))
-            except (OSError,TypeError): continue
+            if not isinstance(path,str): continue
+            activity=codex_turn(Path(path).expanduser(),now)
+            if activity: out.append(activity)
     elif provider.kind=='cursor':
         if not running('cursor'): return []
         for (raw,) in sqlite_rows(provider.path,'SELECT value FROM composerHeaders WHERE isArchived = 0 ORDER BY recency DESC LIMIT 40'):
