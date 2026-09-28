@@ -381,3 +381,7 @@ local LLM token records, selectable day details, and model totals. Enable local 
 there to read Claude Code, Codex and OpenCode records, or supply imports from other
 clients. Refresh scans incrementally; normal notch polling does not scan token history.
 Use `codenotch usage` for the same JSON report. [Coverage, imports and cost estimates](docs/usage-history.md).
+
+Settings changes use a separate fast path: no provider request or history scan is
+started by saving a setting. The shell watches atomic settings-file changes and reads
+them immediately; an older in-flight poll cannot restore old settings.

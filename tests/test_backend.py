@@ -289,3 +289,20 @@ class Widgets(unittest.TestCase):
             self.assertEqual(widgets.collect({**DEFAULTS,'widgets':['clock','date']},{}),{})
 
 if __name__=='__main__': unittest.main()
+
+class ImmediateSettings(unittest.TestCase):
+    setUp=State.setUp
+    tearDown=State.tearDown
+    def test_setting_never_fetches_even_when_all_providers_due(self):
+        with patch('codenotch.worker.locations',return_value=(self.home,self.config,self.data,self.root/'cache')), \
+             patch('codenotch.worker.local_state',side_effect=AssertionError('settings invoked polling')):
+            start=time.monotonic()
+            result=collect(namespace(set=['widgets','["clock"]']))
+        self.assertEqual(result['settings']['widgets'],['clock'])
+        self.assertGreater(int(result['settings']['revision']),0)
+        self.assertLess(time.monotonic()-start,1)
+    def test_cached_labels_cannot_override_latest_account_name(self):
+        from codenotch.worker import info_snapshot
+        p=Provider('codex','New name','codex',self.home)
+        result=info_snapshot([p],DEFAULTS,{'codex':dict(id='codex',name='Old name')},{})
+        self.assertEqual(result['providers'][0]['name'],'New name')

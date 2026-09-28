@@ -20,6 +20,7 @@
 - [x] Providers: opt-in Copilot and Kimi adapters using existing local credentials, defensive parsers and fixture tests. Document required login sources and live-validation limits.
 - [x] Custom providers: bounded opt-in executables under XDG data, versioned manifest/output, minimal environment, process-group timeout, output cap. Tests execute harmless fixture scripts and validate rejection cases.
 - [x] History: opt-in incremental local Claude/Codex token ledger with private SQLite cache, date/model/project summaries and explicitly configured model prices. Usage tab with an aggregate daily contribution grid, day selection and model breakdown, plus CLI report; tests cover cumulative counters, deduplication, cache reuse and unknown prices.
+- [x] Immediate settings: separate non-network write/read path, settings-file monitor, revision guard and disabled-cache reconciliation.
 - [ ] Visual refinements: continuous green/amber/red/deep-red ramp, revolving activity dot, critical collapsed sliver, complete quota breakdown with bounded scrollable cards.
 - [ ] Monitor placement: dragging across displays, persistent connector placement, disconnected fallback and follow-pointer display mode; preserve fullscreen/overview hiding.
 - [ ] Statistics refinements: period controls, daily bars, source/model/project breakdowns in Usage, native clear hierarchy matching the supplied reference.

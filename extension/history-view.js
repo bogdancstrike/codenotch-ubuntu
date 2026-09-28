@@ -11,8 +11,7 @@ export class UsagePage {
         this.page=new Adw.PreferencesPage({name:'usage',title:'Usage',icon_name:'view-grid-symbolic'});
         const controls=new Adw.PreferencesGroup({title:'Local usage history',description:'Token activity across your LLMs. Records stay on this computer.'});this.page.add(controls);
         this.enabled=owner._toggle(controls,'Read local usage records','Claude Code, Codex, OpenCode and imported records. Off stops scanning.',false,value=>{
-            owner._settings.usageHistory=value;owner._set('usageHistory',value);
-            this.loaded=false;this.load();
+            owner._settings.usageHistory=value;owner._set('usageHistory',value,()=>{this.loaded=false;this.load();});
         });
         const refreshRow=new Adw.ActionRow({title:'Refresh local records',subtitle:'Incremental scan; no provider requests.'});controls.add(refreshRow);
         this.refresh=new Gtk.Button({label:'Refresh',valign:Gtk.Align.CENTER});refreshRow.add_suffix(this.refresh);
@@ -33,7 +32,7 @@ export class UsagePage {
                 if(!value||Array.isArray(value)||typeof value!=='object')throw Error();
                 for(const rates of Object.values(value))for(const key of ['input','output','cacheRead','cacheWrite'])
                     if(!Number.isFinite(rates?.[key])||rates[key]<0)throw Error();
-                owner._set('modelPrices',value);prices.remove_css_class('error');this.loaded=false;this.load();
+                owner._set('modelPrices',value,()=>{this.loaded=false;this.load();});prices.remove_css_class('error');
             }catch(_){prices.add_css_class('error');prices.set_tooltip_text('Use a model-name object with non-negative input, output, cacheRead and cacheWrite USD rates.');}
         });
         this.prices=prices;

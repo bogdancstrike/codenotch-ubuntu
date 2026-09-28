@@ -100,7 +100,7 @@ export default class Codenotch extends Extension {
         // Safety net: an actor left open over the edge is what makes a desktop
         // feel stuck, so verify the real pointer position once a second.
         this._timeout(1000,()=>{this._guard();return true;});
-        this._layout();this._buildMenu();this._scheduleClock();this._run([]);this._schedulePoll();
+        this._watchSettings();this._layout();this._buildMenu();this._scheduleClock();this._run([]);this._schedulePoll();
     }
 
     // ------------------------------------------------------------- plumbing
@@ -388,6 +388,30 @@ export default class Codenotch extends Extension {
         return GLib.file_test('/usr/lib/codenotch/codenotch-worker',GLib.FileTest.EXISTS)
             ? '/usr/lib/codenotch/codenotch-worker' : `${this.path}/../backend/codenotch-worker`;
     }
+    _watchSettings() {
+        const folder=GLib.build_filenamev([GLib.get_user_config_dir(),'codenotch']);
+        GLib.mkdir_with_parents(folder,0o700);
+        this._settingsMonitor=Gio.File.new_for_path(folder).monitor_directory(Gio.FileMonitorFlags.WATCH_MOVES,null);
+        this._connect(this._settingsMonitor,'changed',(_monitor,file,other)=>{
+            if(file?.get_basename()!=='settings.json'&&other?.get_basename()!=='settings.json')return;
+            this._removeTimer(this._settingsTimer);
+            this._settingsTimer=this._timeout(30,()=>{this._settingsTimer=null;this._readSettings();return false;});
+        });
+    }
+    _readSettings() {
+        if(this._readingSettings){this._settingsPending=true;return;}
+        this._readingSettings=true;
+        const proc=Gio.Subprocess.new([this._workerPath(),'--info'],Gio.SubprocessFlags.STDOUT_PIPE|Gio.SubprocessFlags.STDERR_SILENCE);
+        this._jobs.add(proc);
+        const watchdog=this._timeout(5000,()=>{proc.force_exit();return false;});
+        proc.communicate_utf8_async(null,null,(process,result)=>{
+            this._jobs.delete(process);this._removeTimer(watchdog);this._readingSettings=false;
+            if(!this._alive)return;
+            try{const [ok,out]=process.communicate_utf8_finish(result);if(ok&&process.get_successful())this._accept(JSON.parse(out));}
+            catch(error){logError(error,'codenotch settings update');}
+            if(this._settingsPending){this._settingsPending=false;this._readSettings();}
+        });
+    }
     _run(args) {
         if(!this._alive)return;
         if(this._busy){if(args.length)this._queued.push(args);return;}
@@ -428,6 +452,7 @@ export default class Codenotch extends Extension {
     }
     _showError(message){if(this._statusItem)this._statusItem.label.text=message;}
     _accept(data) {
+        if(BigInt(data.settings?.revision??'0')<BigInt(this._settings.revision??'0'))return;
         const ack=[];
         for(const event of data.alerts??[]){
             if(!this._deliveredAlerts.has(event.id)){
@@ -565,7 +590,7 @@ export default class Codenotch extends Extension {
     }
 
     disable() {
-        this._alive=false;
+        this._alive=false;this._settingsMonitor?.cancel();this._settingsMonitor=null;
         this._cancel?.cancel();for(const proc of this._jobs??[])proc.force_exit();this._jobs?.clear();
         for(const id of this._sources??[])GLib.source_remove(id);this._sources?.clear();
         for(const [object,id] of this._signals??[])object.disconnect(id);this._signals=[];

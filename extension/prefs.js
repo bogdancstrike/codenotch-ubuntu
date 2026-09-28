@@ -21,7 +21,7 @@ const WIDGETS=[
 export default class CodenotchPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         window.set_default_size(680,860);window.set_title('Codenotch Settings');
-        this._window=window;this._alive=true;this._rows=new Map();this._queue=[];this._busy=false;this._results=[];
+        this._window=window;this._alive=true;this._writeJobs=new Set();this._rows=new Map();this._queue=[];this._busy=false;this._results=[];
         Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.FORCE_DARK);
 
         const connections=new Adw.PreferencesPage({title:'Connections',icon_name:'network-transmit-receive-symbolic'});
@@ -51,7 +51,7 @@ export default class CodenotchPreferences extends ExtensionPreferences {
         this._install=new Adw.PreferencesGroup({title:'This install'});about.add(this._install);
         this._care=new Adw.PreferencesGroup({title:'Privacy and maintenance'});about.add(this._care);
 
-        window.connect('close-request',()=>{this._alive=false;this._usage?.destroy();this._process?.force_exit();return false;});
+        window.connect('close-request',()=>{this._alive=false;this._usage?.destroy();this._process?.force_exit();for(const proc of this._writeJobs)proc.force_exit();return false;});
         this._run(['--info'],data=>{if(data)this._build(data);});
     }
 
@@ -75,15 +75,28 @@ export default class CodenotchPreferences extends ExtensionPreferences {
                     if(done)done(null);
                 }
             }
-            if(this._queue.length){const [a,cb]=this._queue.shift();this._run(a,cb);}
+            if(this._alive&&this._queue.length){const [a,cb]=this._queue.shift();this._run(a,cb);}
         });
     }
     // Writes are counted so a reply from an earlier write cannot roll the
     // switches back over a change the user has already made.
-    _set(key,value){this._write(['--set',key,JSON.stringify(value)]);}
-    _write(args){
+    _set(key,value,done=null){this._write(['--set',key,JSON.stringify(value)],done);}
+    _write(args,done=null){
+        // Settings use their own subprocess so a Verify or history scan cannot
+        // make a switch wait behind network or disk work.
+        const worker=GLib.file_test('/usr/lib/codenotch/codenotch-worker',GLib.FileTest.EXISTS)
+            ? '/usr/lib/codenotch/codenotch-worker' : `${this.path}/../backend/codenotch-worker`;
         this._writes=(this._writes??0)+1;
-        this._run(args,data=>{this._writes=Math.max(0,this._writes-1);if(data)this._update(data);});
+        let proc;
+        try{proc=Gio.Subprocess.new([worker,...args],Gio.SubprocessFlags.STDOUT_PIPE|Gio.SubprocessFlags.STDERR_SILENCE);}
+        catch(error){this._writes--;this._error.set_title('Could not save settings.');return;}
+        this._writeJobs.add(proc);
+        proc.communicate_utf8_async(null,null,(process,result)=>{
+            this._writeJobs.delete(process);this._writes=Math.max(0,this._writes-1);
+            if(!this._alive)return;
+            try{const [ok,out]=process.communicate_utf8_finish(result);if(!ok||!process.get_successful())throw Error();this._update(JSON.parse(out));if(done)done();}
+            catch(error){this._error.set_title('Could not save settings.');}
+        });
     }
 
     _toggle(group,title,subtitle,state,change) {
@@ -106,7 +119,7 @@ export default class CodenotchPreferences extends ExtensionPreferences {
             const row=new Adw.ExpanderRow({title:p.name,subtitle:p.message??'Expand to verify the connection and view details.'});
             this._integrations.add(row);
             const toggle=new Gtk.Switch({active:p.enabled,valign:Gtk.Align.CENTER});row.add_suffix(toggle);
-            toggle.connect('notify::active',()=>{if(!this._syncing)this._run([toggle.active?'--enable':'--disable',p.id]);});
+            toggle.connect('notify::active',()=>{if(!this._syncing)this._write([toggle.active?'--enable':'--disable',p.id]);});
             const label=new Adw.EntryRow({title:'Account label',text:p.name,show_apply_button:true});row.add_row(label);
             label.connect('apply',()=>{
                 const labels={...this._settings.accountLabels,[p.id]:label.get_text()};
@@ -298,6 +311,7 @@ export default class CodenotchPreferences extends ExtensionPreferences {
     }
 
     _update(data) {
+        if(BigInt(data.settings?.revision??'0')<BigInt(this._settings?.revision??'0'))return;
         this._syncing=true;
         for(const p of data.providers??[]){
             if(!this._rows.has(p.id))this._addProviderRow(p);

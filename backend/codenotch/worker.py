@@ -130,6 +130,8 @@ def configuration(config):
     if out['notifyThreshold'] not in (75,80,90,95): out['notifyThreshold']=90
     for key in ('usageHistory','forecast','panelUsage','windowClock','notifyQuota','notifyReset','notifyFailures','demo','panelIcon','hideFullscreen','peek','clock24','clockSeconds'):
         out[key]=bool(out[key])
+    try: out['revision']=str((config/'codenotch/settings.json').stat().st_mtime_ns)
+    except OSError: out['revision']='0'
     return out
 
 def apply_settings(args,config,root):
@@ -230,9 +232,13 @@ def update_provider(p,old,settings,home,config,data,force=None):
     return fetch_provider(p,row,old,settings,home,config,data) if needs else row
 
 def info_snapshot(providers,settings,old,widget_cache):
-    return dict(version=__version__,settings=settings,widgets=widget_cache.get('current',{}),providers=[
-        {**p.meta(),'enabled':is_enabled(p,settings),'source':source_name(p),
-         **{k:v for k,v in current_reading(old.get(p.id,{}),time.time()).items() if k not in ('source','enabled')}} for p in providers])
+    rows=[]
+    for p in providers:
+        row={**current_reading(old.get(p.id,{}),time.time()),**p.meta(),'enabled':is_enabled(p,settings),'source':source_name(p)}
+        if not row['enabled']:
+            row.update(status='disabled',detected=False,windows=[],sessions=[],message='Disconnected here. The owning tool remains signed in.')
+        rows.append(row)
+    return dict(version=__version__,settings=settings,widgets=widget_cache.get('current',{}),providers=rows)
 
 def collect(args):
     home,config,data,cache=locations(); root=cache/'codenotch'; root.mkdir(mode=0o700,parents=True,exist_ok=True)
@@ -260,6 +266,12 @@ def collect(args):
     if getattr(args,'diagnostics',False):
         from .diagnostics import report
         return {'report':report(info_snapshot(providers,settings,old,widget_cache)['providers'],time.time())}
+    if args.set or args.enable or args.disable or getattr(args,'location',None) is not None:
+        with Lock(root/'settings.lock'):
+            settings=configuration(config)
+            snapshot=info_snapshot(discover(home,config,data,settings),settings,old,widget_cache)
+            atomic_json(root/'usage.json',snapshot)
+        return snapshot
     if args.info:
         return info_snapshot(providers,settings,old,widget_cache)
     with Lock(root/'poll.lock',blocking=False) as poll:
@@ -284,15 +296,19 @@ def collect(args):
                 current=widget_job.result()
         else:
             current=safe_widgets(settings,widget_cache,force_widgets)
-        alert_path=root/'alerts.json'
-        memory=read_json(alert_path)
-        if any(settings.get(k) for k in ('notifyQuota','notifyReset','notifyFailures')) or memory:
-            memory=evaluate_alerts(rows,settings,memory,time.time())
-            atomic_json(alert_path,memory)
-        snapshot=dict(version=__version__,settings=settings,providers=rows,widgets=current,generatedAt=time.time(),alerts=memory.get('pending',[]))
         with Lock(root/'settings.lock'):
+            # A slow in-flight request must never overwrite newer settings or
+            # restore a disabled account's cached usage after the user saved.
+            settings=configuration(config)
+            snapshot=info_snapshot(discover(home,config,data,settings),settings,{r['id']:r for r in rows},{'current':current})
+            alert_path=root/'alerts.json';memory=read_json(alert_path)
+            if any(settings.get(k) for k in ('notifyQuota','notifyReset','notifyFailures')) or memory:
+                memory=evaluate_alerts(snapshot['providers'],settings,memory,time.time())
+                atomic_json(alert_path,memory)
+            snapshot.update(generatedAt=time.time(),alerts=memory.get('pending',[]))
             atomic_json(root/'usage.json',snapshot)
             atomic_json(root/'widgets.json',{**widget_cache,'current':current})
+
         return snapshot
 
 def safe_widgets(settings,cache,force):
