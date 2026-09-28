@@ -178,7 +178,7 @@ def claude_profile(path):
     friends are other tools' data directories and must not become empty rings."""
     return any((path/name).exists() for name in ('.credentials.json','settings.json','sessions','statsig'))
 
-def discover(home,config,data):
+def discover(home,config,data,settings=None):
     profiles=[home/'.claude']
     extra=sorted(p for p in home.glob('.claude-*') if p.is_dir() and claude_profile(p))
     custom=os.environ.get('CLAUDE_CONFIG_DIR')
@@ -194,6 +194,18 @@ def discover(home,config,data):
         Provider('grok','Grok','grok',home/'.grok/auth.json'),
         Provider('opencode','OpenCode','opencode',data/'opencode/auth.json'),
     ])
+    for kind in ('codex','grok'):
+        for directory in sorted(home.glob('.'+kind+'-*')):
+            if not (directory/'auth.json').is_file(): continue
+            if kind=='codex' and directory==codex_path: continue
+            out.append(Provider(kind+':'+directory.name,kind.title()+' ('+directory.name.removeprefix('.'+kind+'-')+')',kind,directory if kind=='codex' else directory/'auth.json'))
+    for profile in (settings or {}).get('accountProfiles',[]):
+        path=Path(profile['path'])
+        if profile['kind']=='grok': path=path/'auth.json'
+        if any(p.kind==profile['kind'] and p.path==path for p in out): continue
+        out.append(Provider('profile:'+profile['id'],profile['name'],profile['kind'],path))
+    for provider in out:
+        provider.name=(settings or {}).get('accountLabels',{}).get(provider.id,provider.name)
     return out
 
 def detected(provider,home,config,data):

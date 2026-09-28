@@ -19,6 +19,7 @@ from .activity import sessions
 from . import widgets as widget_module
 from .alerts import evaluate as evaluate_alerts
 from .cache import current as current_reading
+from .accounts import profiles as clean_profiles, labels as clean_labels
 
 DEFAULTS=dict(
     edge='right',visibility='hover',scale=1.0,monitor=-1,disabled=[],demo=False,
@@ -28,7 +29,7 @@ DEFAULTS=dict(
     widgets=['clock','date'],
     clock24=True,clockSeconds=False,dateStyle='medium',
     weatherPlace='',weatherLat=None,weatherLon=None,weatherUnits='metric',
-    textContrast='high',pinnedWindows={},
+    textContrast='high',pinnedWindows={},accountProfiles=[],accountLabels={},
     forecast=False,quotaDisplay='used',windowClock=False,panelUsage=True,panelAccount='',
     notifyQuota=False,notifyReset=False,notifyFailures=False,notifyThreshold=90,
 )
@@ -103,6 +104,8 @@ def configuration(config):
     if not isinstance(out['scale'],(int,float)) or not 0.75<=out['scale']<=2: out['scale']=1.0
     if not isinstance(out['monitor'],int): out['monitor']=-1
     out['widgets']=clamp_widgets(out['widgets'])
+    out['accountProfiles']=clean_profiles(out['accountProfiles'])
+    out['accountLabels']=clean_labels(out['accountLabels'])
     pins=out['pinnedWindows']
     out['pinnedWindows']={k:v for k,v in pins.items() if isinstance(k,str) and isinstance(v,str) and len(k)<160 and len(v)<160} if isinstance(pins,dict) else {}
     for key,low,high in (('pollSeconds',60,3600),('idlePollSeconds',60,7200)):
@@ -223,7 +226,7 @@ def collect(args):
     settings=apply_settings(args,config,root)
     if args.search:
         return dict(version=__version__,query=args.search,results=widget_module.search_places(args.search))
-    providers=discover(home,config,data)
+    providers=discover(home,config,data,settings)
     if args.demo or settings['demo']:
         return demo_snapshot(providers,settings,root)
     archive=read_json(root/'usage.json'); old={p['id']:p for p in archive.get('providers',[]) if isinstance(p,dict) and 'id' in p}

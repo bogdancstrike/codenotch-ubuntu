@@ -98,15 +98,16 @@ export default class CodenotchPreferences extends ExtensionPreferences {
         group.add(row);return row;
     }
 
-    _build(data) {
-        const s=data.settings;this._settings=s;
-        this._error.set_title('Connections');
-        this._error.set_subtitle('Disabled AIs are never polled. No tokens are copied or refreshed.');
-        for(const p of data.providers){
+    _addProviderRow(p) {
             const row=new Adw.ExpanderRow({title:p.name,subtitle:p.message??'Expand to verify the connection and view details.'});
             this._integrations.add(row);
             const toggle=new Gtk.Switch({active:p.enabled,valign:Gtk.Align.CENTER});row.add_suffix(toggle);
             toggle.connect('notify::active',()=>{if(!this._syncing)this._run([toggle.active?'--enable':'--disable',p.id]);});
+            const label=new Adw.EntryRow({title:'Account label',text:p.name,show_apply_button:true});row.add_row(label);
+            label.connect('apply',()=>{
+                const labels={...this._settings.accountLabels,[p.id]:label.get_text()};
+                this._settings.accountLabels=labels;this._set('accountLabels',labels);
+            });
             const source=new Adw.ActionRow({title:'Usage source',subtitle:p.source??'Local tool sign-in'});row.add_row(source);
             const status=new Adw.ActionRow({title:'Connection status',subtitle:p.message??'Not verified yet'});row.add_row(status);
             const usage=new Adw.ActionRow({title:'Usage windows',subtitle:'No reading yet'});row.add_row(usage);
@@ -124,8 +125,28 @@ export default class CodenotchPreferences extends ExtensionPreferences {
                 this._settings.pinnedWindows=pins;this._set('pinnedWindows',pins);
             });
             this._rows.set(p.id,{row,toggle,status,usage,checked,button,pin,pinKeys:[],diagnostic});
-        }
+    }
 
+    _build(data) {
+        const s=data.settings;this._settings=s;
+        this._error.set_title('Connections');
+        this._error.set_subtitle('Disabled AIs are never polled. No tokens are copied or refreshed.');
+        for(const p of data.providers)this._addProviderRow(p);
+
+        const profiles=new Adw.ExpanderRow({title:'Add an account profile',subtitle:'Use a folder already signed in with Claude Code, Codex or Grok.'});this._integrations.add(profiles);
+        const kind=new Adw.ComboRow({title:'Provider',model:Gtk.StringList.new(['Claude Code','Codex','Grok'])});profiles.add_row(kind);
+        const profileName=new Adw.EntryRow({title:'Label'});profiles.add_row(profileName);
+        const profilePath=new Adw.EntryRow({title:'Absolute profile folder'});profiles.add_row(profilePath);
+        const addRow=new Adw.ActionRow({title:'Use existing sign-in'});profiles.add_row(addRow);
+        const add=new Gtk.Button({label:'Add profile',valign:Gtk.Align.CENTER});addRow.add_suffix(add);
+        add.connect('clicked',()=>{
+            const path=profilePath.get_text().trim();
+            if(!path.startsWith('/')){addRow.set_subtitle('Enter an absolute folder path.');return;}
+            const entry={id:GLib.uuid_string_random(),kind:['claude','codex','grok'][kind.selected],path,name:profileName.get_text().trim()||'Additional account'};
+            const entries=[...(this._settings.accountProfiles??[]),entry];
+            this._settings.accountProfiles=entries;this._set('accountProfiles',entries);
+            addRow.set_subtitle('Profile added. Its connection appears above.');
+        });
         const diagnosticRow=new Adw.ActionRow({title:'Share connection diagnostics',subtitle:'Excludes account names, paths, sessions and credentials.'});
         const copy=new Gtk.Button({label:'Copy report',valign:Gtk.Align.CENTER});diagnosticRow.add_suffix(copy);this._general.add(diagnosticRow);
         copy.connect('clicked',()=>this._run(['--diagnostics'],result=>{
@@ -273,8 +294,9 @@ export default class CodenotchPreferences extends ExtensionPreferences {
     _update(data) {
         this._syncing=true;
         for(const p of data.providers??[]){
+            if(!this._rows.has(p.id))this._addProviderRow(p);
             const r=this._rows.get(p.id);if(!r)continue;
-            r.toggle.active=p.enabled;
+            r.row.set_title(p.name);r.toggle.active=p.enabled;
             r.pinKeys=['',...(p.windows??[]).map(w=>w.id)];
             r.pin.set_model(Gtk.StringList.new(['Automatic (most used)',...(p.windows??[]).map(w=>w.label)]));
             r.pin.set_selected(Math.max(0,r.pinKeys.indexOf(data.settings?.pinnedWindows?.[p.id]??'')));

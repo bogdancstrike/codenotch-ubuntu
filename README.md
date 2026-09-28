@@ -345,3 +345,8 @@ successful reading. Antigravity records its local/CLI/cloud fallback outcomes.
 Optional forecasts in Appearance estimate whether a quota lasts until reset, using
 its average consumption since the reported window began. They require an explicit
 duration, stay hidden for stale/early windows, and show an ETA only within two hours.
+
+Additional Codex and Grok sign-ins in `~/.codex-NAME` and `~/.grok-NAME` are
+discovered alongside Claude profiles. Connections → Add an account profile accepts
+an existing absolute profile folder. Each account has its own label, pin, cache and
+enablement switch. CodeNotch never signs in or copies tokens on your behalf.
