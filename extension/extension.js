@@ -72,7 +72,18 @@ export default class Codenotch extends Extension {
         this._anchor.connect('leave-event',()=>{this._foldLater();return Clutter.EVENT_PROPAGATE;});
         Main.layoutManager.addChrome(this._anchor,{affectsStruts:false,trackFullscreen:false});
 
-        this._card=new St.DrawingArea({reactive:true,track_hover:true});
+        this._card=new St.DrawingArea({reactive:true,can_focus:true,track_hover:true,accessible_name:'Usage details. Scroll or use arrow keys for more windows.'});
+        this._card.connect('scroll-event',(_actor,event)=>{
+            const direction=event.get_scroll_direction();
+            const delta=direction===Clutter.ScrollDirection.SMOOTH?event.get_scroll_delta()[1]*35:direction===Clutter.ScrollDirection.UP?-45:45;
+            this._scrollCard(delta);return Clutter.EVENT_STOP;
+        });
+        this._card.connect('button-press-event',()=>{this._card.grab_key_focus();return Clutter.EVENT_PROPAGATE;});
+        this._card.connect('key-press-event',(_actor,event)=>{
+            const key=event.get_key_symbol();
+            if(key===Clutter.KEY_Down||key===Clutter.KEY_Up){this._scrollCard(key===Clutter.KEY_Down?45:-45);return Clutter.EVENT_STOP;}
+            if(key===Clutter.KEY_Escape){this._showCard(null);return Clutter.EVENT_STOP;}return Clutter.EVENT_PROPAGATE;
+        });
         this._card.connect('repaint',area=>this._paintCard(area));
         this._card.connect('enter-event',()=>{this._cancelFold();return Clutter.EVENT_PROPAGATE;});
         this._card.connect('leave-event',()=>{this._foldLater();return Clutter.EVENT_PROPAGATE;});
@@ -158,7 +169,7 @@ export default class Codenotch extends Extension {
         try{
             cr.scale(this._scale,this._scale);
             const target=this._hover;
-            if(target?.kind==='provider')drawCard(cr,this._providers[target.index],D.cardWidth,this._cardBudget,this._settings);
+            if(target?.kind==='provider'){cr.translate(0,-(this._cardScroll??0));drawCard(cr,this._providers[target.index],D.cardWidth,this._cardBudget,this._settings);}
             else if(target?.kind==='widget')drawWidgetCard(cr,widgetCard(target.ref,this._widgetData[target.ref],this._settings),D.cardWidth,this._settings);
         }catch(e){logError(e,'codenotch card');}
         cr.$dispose();
@@ -341,6 +352,12 @@ export default class Codenotch extends Extension {
     }
 
     // ------------------------------------------------------------------ card
+    _scrollCard(delta) {
+        if(this._hover?.kind!=='provider')return;
+        const layout=cardLayout(this._providers[this._hover.index],this._cardBudget,this._settings);
+        this._cardScroll=clamp((this._cardScroll??0)+delta,0,Math.max(0,layout.contentHeight-layout.height));
+        this._card.queue_repaint();
+    }
     _showCard(hit,force=false) {
         if(!this._alive||!this._card)return;
         if(!hit||this._progress<.9||this._menu?.isOpen){
@@ -353,6 +370,7 @@ export default class Codenotch extends Extension {
         if(hit.kind==='provider'&&!this._providers[hit.index]){this._showCard(null);return;}
         if(!force&&this._hover&&this._hover.kind===hit.kind&&this._hover.index===hit.index)return;
         const appearing=!this._card.visible;
+        if(this._hover?.kind!==hit.kind||this._hover?.index!==hit.index)this._cardScroll=0;
         this._hover=hit;
         const s=this._scale,g=this._g,edge=this._settings.edge,a=this._work;
         const height=hit.kind==='provider'

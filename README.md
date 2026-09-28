@@ -385,3 +385,9 @@ Use `codenotch usage` for the same JSON report. [Coverage, imports and cost esti
 Settings changes use a separate fast path: no provider request or history scan is
 started by saving a setting. The shell watches atomic settings-file changes and reads
 them immediately; an older in-flight poll cannot restore old settings.
+
+Rings smoothly interpolate from green through amber to red and deep red. Busy turns
+use a revolving dot, while waiting sessions use a stationary amber dot. A fresh quota
+at 90% or above lights the resting sliver red without adding an idle animation.
+Hover cards retain every reported window (including Codex model/review pools); scroll
+or focus the card and use Up/Down when its contents exceed the available height.

@@ -46,6 +46,10 @@ def claude(data, now):
         row = data.get(field)
         if key not in out and isinstance(row,dict) and number(row.get('utilization')) is not None:
             out[key] = window(key, labels[key], row['utilization'], row.get('resets_at'))
+    for key,row in data.items():
+        if key in ('five_hour','seven_day','seven_day_opus','seven_day_sonnet'): continue
+        if isinstance(row,dict) and key.startswith(('five_hour','seven_day')) and number(row.get('utilization')) is not None:
+            out[key]=window(key,key.replace('_',' ').title(),row['utilization'],row.get('resets_at'))
     return require(sorted(out.values(), key=lambda w: (0 if w['id']=='session' else 1 if w['id']=='weekly_all' else 2, w['id'])))
 
 def duration_label(seconds, fallback):
@@ -58,14 +62,20 @@ def duration_label(seconds, fallback):
 
 def codex(data, now):
     out=[]
-    limits=data.get('rate_limit') or {}
-    for key, fallback in [('primary','Current session'),('secondary','Longer window')]:
-        row=limits.get(key+'_window')
-        if not isinstance(row, dict): continue
-        reset=timestamp(row.get('reset_at'))
-        if reset is None and number(row.get('reset_after_seconds')) is not None:
-            reset=now+row['reset_after_seconds']
-        out.append(window(key,duration_label(row.get('limit_window_seconds'),fallback),row.get('used_percent'),reset,row.get('limit_window_seconds')))
+    groups=[('',None,data.get('rate_limit') or {})]
+    if isinstance(data.get('code_review_rate_limit'),dict): groups.append(('review','Code review',data['code_review_rate_limit']))
+    for i,extra in enumerate(data.get('additional_rate_limits') or []):
+        if not isinstance(extra,dict): continue
+        groups.append((str(extra.get('metered_feature') or extra.get('limit_name') or f'extra-{i}'),extra.get('limit_name') or 'Model quota',extra.get('rate_limit') or {}))
+    for prefix,label,limits in groups:
+        if not isinstance(limits,dict): continue
+        for key,fallback in [('primary','Current session'),('secondary','Longer window')]:
+            row=limits.get(key+'_window')
+            if not isinstance(row,dict) or number(row.get('used_percent')) is None: continue
+            reset=timestamp(row.get('reset_at'))
+            if reset is None and number(row.get('reset_after_seconds')) is not None: reset=now+row['reset_after_seconds']
+            title=duration_label(row.get('limit_window_seconds'),fallback)
+            out.append(window(prefix+'.'+key if prefix else key,f'{label} · {title}' if label else title,row['used_percent'],reset,row.get('limit_window_seconds')))
     return require(out)
 
 def cursor(data, now):

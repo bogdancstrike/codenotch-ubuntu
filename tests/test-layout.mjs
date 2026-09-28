@@ -44,9 +44,10 @@ for(const edge of EDGES){
 }
 
 assert.equal(D.ring,44);
-assert.equal(band(.21),P.green);assert.equal(band(.52),P.yellow);assert.equal(band(.73),P.orange);
+assert.equal(band(0),P.green);assert.equal(band(.5),P.yellow);assert.equal(band(.7),P.orange);assert.notEqual(band(.6),band(.61));
 assert.equal(resetCopy(160,100),'Resets in 1 min');assert.equal(resetCopy(0,100),'');
-assert(cardLayout({windows:[],sessions:Array(20).fill({})},250).sessions.length<20);
+assert.equal(cardLayout({windows:[],sessions:Array(20).fill({})},250).height,250);
+assert.equal(cardLayout({windows:Array(20).fill({}),sessions:[]},250).windows.length,20);
 
 // Widgets: formatting is local, never invented, and every kind has a card.
 const noon=new Date(2026,8,7,14,5,9);
@@ -113,7 +114,7 @@ assert.equal(percentText(1.2,{quotaDisplay:'remaining'}),'0%');
 assert.equal(elapsedWindow({resetsAt:200,windowSeconds:200},100),.5);
 assert.equal(elapsedWindow({resetsAt:200},100),null);
 assert.equal(elapsedWindow({resetsAt:200,windowSeconds:200},201),null);
-assert.equal(band(.95),P.red);assert.equal(band(1),P.exhausted);
+assert.equal(band(.9),P.red);assert.equal(band(1),P.exhausted);
 
 const {panelAccount}=await import('../extension/usage.js');
 const accounts=[{...quotas,enabled:true},{id:'claude',enabled:false,windows:[{fraction:1}]}];

@@ -25,8 +25,9 @@ class Parsers(unittest.TestCase):
     def test_codex_actual_window_length(self):
         out=model.codex({'rate_limit':{'primary_window':{'used_percent':21,'limit_window_seconds':2592000,'reset_after_seconds':300}}},100)
         self.assertEqual(out[0]['label'],'Monthly limit');self.assertEqual(out[0]['resetsAt'],400)
-    def test_codex_ignores_review_quota(self):
-        with self.assertRaises(model.ProviderError):model.codex({'code_review_rate_limit':{'primary_window':{'used_percent':99}}},0)
+    def test_codex_includes_review_and_model_quotas(self):
+        rows=model.codex({'code_review_rate_limit':{'primary_window':{'used_percent':99}},'additional_rate_limits':[{'limit_name':'Fast model','rate_limit':{'secondary_window':{'used_percent':60}}}]},0)
+        self.assertEqual(len(rows),2);self.assertEqual(rows[0]['id'],'review.primary');self.assertIn('Fast model',rows[1]['label'])
     def test_cursor_free_plan_allowance(self):
         out=model.cursor({'individualUsage':{'plan':{'totalPercentUsed':9.5,'used':0,'limit':0}}},0)
         self.assertEqual(out[0]['fraction'],.095)

@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from .providers import read_json, sqlite_rows
 from .model import timestamp
-from .turns import codex_turn
+from .turns import codex_turn, claude_turn
 
 def home_short(text):
     """~/project reads better than /home/name/project in a narrow card."""
@@ -28,6 +28,20 @@ def sessions(provider):
             except OSError: continue
             state='waiting' if row.get('tempo')=='blocked' or row.get('status')=='waiting' else 'busy' if row.get('tempo')=='active' or row.get('status')=='busy' else 'idle'
             out.append(dict(name=str(row.get('name') or Path(cwd).name),detail=home_short(row.get('waitingFor') or row.get('needs') or cwd),state=state,since=timestamp(row.get('statusUpdatedAt') or row.get('updatedAt')) or now,derived=False))
+        # Also support unmodified Claude clients that only write transcripts.
+        if not out and running('claude'):
+            import heapq
+            candidates=[]
+            projects=provider.path/'projects'
+            if projects.is_dir():
+                for folder in projects.iterdir():
+                    if not folder.is_dir(): continue
+                    for path in folder.glob('*.jsonl'):
+                        try: candidates.append((path.stat().st_mtime,str(path)))
+                        except OSError: pass
+            for _,path in heapq.nlargest(8,candidates):
+                activity=claude_turn(Path(path),now)
+                if activity: out.append(activity)
     elif provider.kind=='codex':
         databases=sorted(provider.path.glob('state_*.sqlite'),key=lambda p:int(p.stem.split('_')[-1]) if p.stem.split('_')[-1].isdigit() else -1,reverse=True)
         paths=[]

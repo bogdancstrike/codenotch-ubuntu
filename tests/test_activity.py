@@ -25,3 +25,12 @@ class Turns(unittest.TestCase):
     def test_no_unbounded_read(self):
         self.path.write_bytes(b'x'*200000+b'\n'+json.dumps(dict(timestamp=100,type='event_msg',payload=dict(type='task_started'))).encode()+b'\n')
         self.assertIsNotNone(codex_turn(self.path,101))
+
+class ClaudeTurns(unittest.TestCase):
+    setUp=Turns.setUp
+    def test_claude_lifecycle(self):
+        from codenotch.turns import claude_turn
+        self.path.write_text(json.dumps(dict(type='assistant',timestamp=100,message=dict(stop_reason='tool_use')))+'\n')
+        self.assertIsNotNone(claude_turn(self.path,500))
+        with self.path.open('a') as stream: stream.write(json.dumps(dict(type='assistant',timestamp=501,message=dict(stop_reason='end_turn')))+'\n')
+        self.assertIsNone(claude_turn(self.path,502))

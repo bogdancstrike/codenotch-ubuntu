@@ -24,7 +24,16 @@ export const CONTRAST={normal:{dim:'#B4B4B4',muted:'#8A8A8A',faint:'#606060'},
     higher:{dim:'#F2F4F6',muted:'#C6CBD1',faint:'#93999F'}};
 export function tone(settings,name){return (CONTRAST[settings?.textContrast]??CONTRAST.high)[name]??P[name];}
 
-export function band(f) {return f<.5?P.green:f<.7?P.yellow:f<.9?P.orange:f<1?P.red:P.exhausted;}
+export function band(f) {
+    const stops=[[0,P.green],[.5,P.yellow],[.7,P.orange],[.9,P.red],[1,P.exhausted]];
+    const value=Math.max(0,Math.min(1,f));
+    for(let i=1;i<stops.length;i++){
+        const [end,to]=stops[i],[start,from]=stops[i-1];if(value>end)continue;
+        const ratio=(value-start)/(end-start);
+        return '#'+[1,3,5].map(at=>Math.round(parseInt(from.slice(at,at+2),16)*(1-ratio)+parseInt(to.slice(at,at+2),16)*ratio).toString(16).padStart(2,'0')).join('').toUpperCase();
+    }
+    return P.exhausted;
+}
 export function color(cr,hex,alpha=1) {const n=parseInt(hex.slice(1),16);cr.setSourceRGBA((n>>16&255)/255,(n>>8&255)/255,(n&255)/255,alpha);}
 
 // ---------------------------------------------------------------- typography
@@ -279,7 +288,7 @@ export function ring(cr,p,cx,cy,phase=0,alpha=1,settings={}) {
     const elapsed=settings.windowClock?elapsedWindow(selected):null;
     if(elapsed!==null){cr.newPath();cr.arc(cx,cy,D.ring/2+3,-Math.PI/2,-Math.PI/2+2*Math.PI*elapsed);color(cr,tone(settings,'muted'),alpha*.7);cr.setLineWidth(1.5);cr.stroke();}
     const activity=p.sessions?.find(s=>s.state==='waiting')??p.sessions?.find(s=>s.state==='busy');
-    if(activity){const busy=activity.state==='busy';cr.newPath();cr.arc(cx,cy,72*PX/2,busy?phase:0,(busy?phase:0)+Math.PI*(busy?1.5:2));color(cr,busy?P.green:P.amber,alpha*(busy?1:.6+.4*Math.sin(phase)));cr.setLineWidth(5.5*PX);cr.stroke();}
+    if(activity){const busy=activity.state==='busy',r=16;cr.newPath();cr.arc(cx+(busy?Math.cos(phase)*r:0),cy+(busy?Math.sin(phase)*r:-r),2.3,0,Math.PI*2);color(cr,busy?P.green:P.amber,alpha);cr.fill();}
     glyph(cr,p.glyph,cx,cy,D.glyph,alpha);
     const label=percentText(f,settings);
     text(cr,label,cx,cy+D.ring/2+D.gap+13,15,stale?tone(settings,'muted'):P.white,'center',W.semi,{alpha,tracking:-.2});
@@ -288,10 +297,11 @@ export function ring(cr,p,cx,cy,phase=0,alpha=1,settings={}) {
 // -------------------------------------------------------------------- notch
 /** The resting sliver's handle, drawn inside the notch's own transform so it
  *  lands on the pill at every edge and at every point of the unfold. */
-function drawHandle(cr,depth,length,alpha) {
+function drawHandle(cr,depth,length,alpha,critical=false) {
     if(alpha<=.01)return;
     const reach=Math.min(D.handleLength,length*.5)/2;
-    color(cr,P.white,.38*alpha);cr.setLineCap(1);cr.setLineWidth(D.handle);
+    if(critical){color(cr,P.red,.18*alpha);cr.setLineCap(1);cr.setLineWidth(D.handle+5);cr.newPath();cr.moveTo(depth/2,length/2-reach);cr.lineTo(depth/2,length/2+reach);cr.stroke();}
+    color(cr,critical?P.red:P.white,(critical?.95:.38)*alpha);cr.setLineCap(1);cr.setLineWidth(D.handle);
     cr.newPath();cr.moveTo(depth/2,length/2-reach);cr.lineTo(depth/2,length/2+reach);cr.stroke();
 }
 
@@ -308,7 +318,8 @@ export function drawNotch(cr,options={}) {
     const length=folded?g.length:pill.length+(g.length-pill.length)*shape;
     cr.translate(g.depth-depth,(g.length-length)/2);
     notchPath(cr,depth,length);color(cr,P.black);cr.fill();
-    if(settings.peek!==false)drawHandle(cr,depth,length,folded?1:Math.max(0,1-clamp(progress)*5));
+    const critical=providers.some(p=>p.status==='ok'&&(p.windows??[]).some(w=>w.fraction>=.9&&(!w.resetsAt||w.resetsAt>now.getTime()/1000)));
+    if(settings.peek!==false||critical)drawHandle(cr,depth,length,folded?1:Math.max(0,1-clamp(progress)*5),critical);
     cr.restore();
     if(folded||progress<.02)return g;
     const across=(D.depth-D.ring)/2+D.ring/2;
@@ -348,21 +359,21 @@ const C={header:D.cardGlyph+18,note:18,window:58,rule:20,session:44,more:22,
     title:16.5,label:14,reset:12,percent:13.5,note_:12.5,name:13.5,state:12,detail:12,bar:6};
 
 export function cardLayout(p,maxHeight=650,settings={}) {
-    const windows=(p.windows??[]).slice(0,8),notes=['ok'].includes(p.status)?[]:wrap(p.message??'No usage available.',34);
+    const windows=(p.windows??[]),notes=['ok'].includes(p.status)?[]:wrap(p.message??'No usage available.',34);
     if(p.status==='stale'&&p.updatedAt)notes.push(`Last reading: ${Math.max(0,Math.floor((Date.now()/1000-p.updatedAt)/60))} min ago`);
     const forecasts=settings.forecast&&p.status==='ok'?windows.map(w=>forecast(w)):windows.map(()=>null);
     const base=2*D.cardPad+C.header+notes.length*C.note+windows.length*C.window+forecasts.filter(Boolean).length*20;
     const cap=Math.max(0,Math.min(12,Math.floor((maxHeight-base-C.rule)/C.session)));
-    const sessions=(p.sessions??[]).slice(0,cap);
+    const sessions=p.sessions??[];
     const overflow=(p.sessions?.length??0)>sessions.length;
-    return {windows,notes,sessions,overflow,forecasts,
-        height:base+(sessions.length?C.rule+sessions.length*C.session:0)+(overflow?C.more:0)};
+    const contentHeight=base+(sessions.length?C.rule+sessions.length*C.session:0)+(overflow?C.more:0);
+    return {windows,notes,sessions,overflow,forecasts,contentHeight,height:Math.min(maxHeight,contentHeight)};
 }
 export function drawCard(cr,p,width=D.cardWidth,maxHeight=650,settings={}) {
     const l=cardLayout(p,maxHeight,settings),pad=D.cardPad,inner=width-2*pad;
     const muted=tone(settings,'muted'),dim=tone(settings,'dim');
-    roundRect(cr,0,0,width,l.height,D.cardCorner);color(cr,P.shell);cr.fill();
-    color(cr,P.line,.6);cr.setLineWidth(1);roundRect(cr,.5,.5,width-1,l.height-1,D.cardCorner);cr.stroke();
+    roundRect(cr,0,0,width,l.contentHeight,D.cardCorner);color(cr,P.shell);cr.fill();
+    color(cr,P.line,.6);cr.setLineWidth(1);roundRect(cr,.5,.5,width-1,l.contentHeight-1,D.cardCorner);cr.stroke();
     glyph(cr,p.glyph,pad+D.cardGlyph/2,pad+D.cardGlyph/2,D.cardGlyph);
     const titleLeft=pad+D.cardGlyph+11;
     text(cr,fit(cr,`${p.name} usage`,C.title,W.semi,width-pad-titleLeft),titleLeft,pad+D.cardGlyph/2+6,C.title,P.white,'left',W.semi,{tracking:-.2});
@@ -452,8 +463,8 @@ export function widgetCardLayout(card) {
 export function drawWidgetCard(cr,card,width=D.cardWidth,settings={}) {
     const l=widgetCardLayout(card),pad=D.cardPad,inner=width-2*pad;
     const muted=tone(settings,'muted'),dim=tone(settings,'dim');
-    roundRect(cr,0,0,width,l.height,D.cardCorner);color(cr,P.shell);cr.fill();
-    color(cr,P.line,.6);cr.setLineWidth(1);roundRect(cr,.5,.5,width-1,l.height-1,D.cardCorner);cr.stroke();
+    roundRect(cr,0,0,width,l.contentHeight,D.cardCorner);color(cr,P.shell);cr.fill();
+    color(cr,P.line,.6);cr.setLineWidth(1);roundRect(cr,.5,.5,width-1,l.contentHeight-1,D.cardCorner);cr.stroke();
     const badge=card.symbol?32:0;
     let y=pad+11;
     if(card.symbol)weatherSymbol(cr,card.symbol,width-pad-13,pad+13,26,1);
