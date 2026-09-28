@@ -18,6 +18,7 @@ from .providers import read_json, discover, detected
 from .activity import sessions
 from . import widgets as widget_module
 from .alerts import evaluate as evaluate_alerts
+from .cache import current as current_reading
 
 DEFAULTS=dict(
     edge='right',visibility='hover',scale=1.0,monitor=-1,disabled=[],demo=False,
@@ -171,7 +172,7 @@ def local_state(p,old,settings,home,config,data,force=None):
 
     Returns (row, needs_fetch). Runs serially, so a snapshot with nothing due
     never creates a thread pool."""
-    now=time.time(); meta={**p.meta(),'source':source_name(p),'enabled':p.id not in settings['disabled']}
+    now=time.time(); old=current_reading(old,now); meta={**p.meta(),'source':source_name(p),'enabled':p.id not in settings['disabled']}
     # This is before detection: disabled providers' credentials are never inspected.
     if not meta['enabled']:
         return {**meta,'status':'disabled','detected':False,'windows':[],'sessions':[],'message':'Disconnected here. The owning tool remains signed in.'},False
@@ -191,6 +192,7 @@ def local_state(p,old,settings,home,config,data,force=None):
 def fetch_provider(p,base,old,settings,home,config,data):
     """The blocking half: one usage request, with backoff bookkeeping."""
     now=time.time()
+    old=current_reading(old,now)
     cadence=settings['pollSeconds'] if base.get('sessions') else settings['idlePollSeconds']
     try:
         windows=p.fetch(home,config,data)
@@ -209,7 +211,7 @@ def update_provider(p,old,settings,home,config,data,force=None):
 def info_snapshot(providers,settings,old,widget_cache):
     return dict(version=__version__,settings=settings,widgets=widget_cache.get('current',{}),providers=[
         {**p.meta(),'enabled':p.id not in settings['disabled'],'source':source_name(p),
-         **{k:v for k,v in old.get(p.id,{}).items() if k not in ('source','enabled')}} for p in providers])
+         **{k:v for k,v in current_reading(old.get(p.id,{}),time.time()).items() if k not in ('source','enabled')}} for p in providers])
 
 def collect(args):
     home,config,data,cache=locations(); root=cache/'codenotch'; root.mkdir(mode=0o700,parents=True,exist_ok=True)

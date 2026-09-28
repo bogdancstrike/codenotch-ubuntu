@@ -97,13 +97,13 @@ class State(unittest.TestCase):
             out=update_provider(self.p,{'windows':[{'fraction':.73}]},{**DEFAULTS,'disabled':['claude']},self.home,self.config,self.data,'all')
         self.assertEqual(out['windows'],[]);self.assertEqual(out['status'],'disabled')
     def test_backoff_survives_forced_refresh(self):
-        old={'status':'stale','retryAt':time.time()+600,'windows':[{'fraction':.7}]}
+        old={'updatedAt':time.time(),'status':'stale','retryAt':time.time()+600,'windows':[{'fraction':.7}]}
         with patch('codenotch.worker.detected',return_value=True),patch('codenotch.worker.sessions',return_value=[]),patch.object(Provider,'fetch',side_effect=AssertionError('ignored backoff')):
             out=update_provider(self.p,old,DEFAULTS,self.home,self.config,self.data,'all')
         self.assertEqual(out['windows'],old['windows'])
     def test_rate_limit_zero_delays_and_retains(self):
         with patch('codenotch.worker.detected',return_value=True),patch('codenotch.worker.sessions',return_value=[]),patch.object(Provider,'fetch',side_effect=model.ProviderError('rateLimited','retry',0)):
-            before=time.time();out=update_provider(self.p,{'windows':[{'fraction':.73}]},DEFAULTS,self.home,self.config,self.data,'all')
+            before=time.time();out=update_provider(self.p,{'updatedAt':time.time(),'windows':[{'fraction':.73}]},DEFAULTS,self.home,self.config,self.data,'all')
         self.assertGreaterEqual(out['retryAt'],before+59);self.assertEqual(out['status'],'stale');self.assertEqual(out['windows'][0]['fraction'],.73)
     def test_retry_after_server_floor(self):
         with patch('codenotch.worker.detected',return_value=True),patch('codenotch.worker.sessions',return_value=[]),patch.object(Provider,'fetch',side_effect=model.ProviderError('rateLimited','retry',3600)):
@@ -188,7 +188,7 @@ class State(unittest.TestCase):
             with Lock(cache/'settings.lock') as settings:
                 self.assertTrue(settings.held)  # settings use their own lock and never wait
     def test_local_state_never_asks_for_a_fetch_before_the_deadline(self):
-        old={'status':'ok','nextPoll':time.time()+300,'windows':[{'fraction':.5}]}
+        old={'updatedAt':time.time(),'status':'ok','nextPoll':time.time()+300,'windows':[{'fraction':.5}]}
         with patch('codenotch.worker.detected',return_value=True),patch('codenotch.worker.sessions',return_value=[]):
             row,needs=local_state(self.p,old,DEFAULTS,self.home,self.config,self.data)
         self.assertFalse(needs);self.assertEqual(row['windows'],old['windows'])

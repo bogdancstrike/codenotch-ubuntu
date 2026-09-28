@@ -320,3 +320,7 @@ Settings → Connections → account → Ring shows. Missing pins fall back to a
 Notifications are opt-in under Connections. Choose a 75/80/90/95% warning,
 reset alerts for previously warned windows, and repeated connection failures.
 Delivery state survives restarts; stale readings never trigger quota alerts.
+
+Cached quota windows expire at their reported reset time. Readings without a reset
+are retained for at most 24 hours. Expired data is shown as awaiting a fresh reading;
+provider retry deadlines still apply. Stale hover cards show the reading's age.

@@ -346,6 +346,7 @@ const C={header:D.cardGlyph+18,note:18,window:58,rule:20,session:44,more:22,
 
 export function cardLayout(p,maxHeight=650) {
     const windows=(p.windows??[]).slice(0,8),notes=['ok'].includes(p.status)?[]:wrap(p.message??'No usage available.',34);
+    if(p.status==='stale'&&p.updatedAt)notes.push(`Last reading: ${Math.max(0,Math.floor((Date.now()/1000-p.updatedAt)/60))} min ago`);
     const base=2*D.cardPad+C.header+notes.length*C.note+windows.length*C.window;
     const cap=Math.max(0,Math.min(12,Math.floor((maxHeight-base-C.rule)/C.session)));
     const sessions=(p.sessions??[]).slice(0,cap);
