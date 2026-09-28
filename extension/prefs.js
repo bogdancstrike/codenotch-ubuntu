@@ -172,6 +172,9 @@ export default class CodenotchPreferences extends ExtensionPreferences {
             [-1,0,1,2,3],s.monitor,v=>this._set('monitor',v));
         this._combo(this._appearance,'Size','',['75%','100% (original)','125%','150%','200%'],[.75,1,1.25,1.5,2],s.scale,v=>this._set('scale',v));
         this._toggle(this._appearance,'Top panel icon','Keeps settings reachable when the notch is hidden.',s.panelIcon,v=>this._set('panelIcon',v));
+        this._toggle(this._appearance,'Top panel percentage','Show the selected account beside the panel icon.',s.panelUsage,v=>this._set('panelUsage',v));
+        this._combo(this._appearance,'Panel account','Automatic chooses the most-used enabled account.',
+            ['Automatic',...data.providers.map(p=>p.name)],['',...data.providers.map(p=>p.id)],s.panelAccount,v=>this._set('panelAccount',v));
         this._toggle(this._appearance,'Hide over fullscreen windows','Also hides in Activities and on the lock screen.',
             s.hideFullscreen,v=>this._set('hideFullscreen',v));
         this._combo(this._appearance,'Quota percentage','Applies to the notch and panel. Colors always reflect usage.',

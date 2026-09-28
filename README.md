@@ -332,3 +332,7 @@ model turns time out after five minutes, tool waits after thirty minutes.
 Appearance includes used/remaining percentages and an optional window clock arc
 (only for provider-reported durations). Colors reflect usage in both modes: green,
 yellow, orange, red at 90%, and deep red when exhausted.
+
+The top panel can show a chosen account's quota or automatically select the most-used
+account. Its Usage overview lists all enabled accounts and reset times from cached
+readings, without extra requests. Configure it under Appearance.

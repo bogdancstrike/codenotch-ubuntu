@@ -20,3 +20,9 @@ export function elapsedWindow(window, now=Date.now()/1000) {
     const elapsed=1-(reset-now)/duration;
     return elapsed>=0&&elapsed<1?elapsed:null;
 }
+
+export function panelAccount(providers, settings={}) {
+    const enabled=providers.filter(p=>p.enabled&&headline(p,settings));
+    return enabled.find(p=>p.id===settings.panelAccount)??enabled.reduce((best,p)=>
+        !best||headline(p,settings).fraction>headline(best,settings).fraction?p:best,null);
+}

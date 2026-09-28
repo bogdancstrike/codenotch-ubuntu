@@ -10,9 +10,9 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as BoxPointer from 'resource:///org/gnome/shell/ui/boxpointer.js';
 import {D,P,W,plan,point,drawNotch,drawCard,cardLayout,drawWidgetCard,widgetCard,widgetCardLayout,
-        hitTest,color,setTextEngine,spring,settled,clamp} from './render.js';
+        hitTest,color,setTextEngine,resetCopy,band,spring,settled,clamp} from './render.js';
 
-import {headline} from './usage.js';
+import {headline,percentText,panelAccount} from './usage.js';
 
 const DEFAULTS={edge:'right',visibility:'hover',scale:1,monitor:-1,panelIcon:true,hideFullscreen:true,
     peek:true,widgets:[],clock24:true,clockSeconds:false,dateStyle:'medium',textContrast:'high',demo:false};
@@ -449,11 +449,11 @@ export default class Codenotch extends Extension {
             if(this._menu?.isOpen)this._rebuildPending=true;else this._buildMenu();
         }else this._updateMenu();
         if(before!==JSON.stringify(this._settings)){this._syncPanel();this._scheduleClock();}
-        this._layout();this._schedulePulse();
+        this._updatePanel();this._layout();this._schedulePulse();
     }
     _scheduleClock() {
         this._removeTimer(this._clockTimer);this._clockTimer=null;
-        if(!this._widgets.includes('clock')&&!this._widgets.includes('date'))return;
+        if(!this._widgets.includes('clock')&&!this._widgets.includes('date')&&!this._settings.windowClock)return;
         const period=this._settings.clockSeconds?1000:60000;
         const delay=period-(Date.now()%period)+25;
         this._clockTimer=this._timeout(delay,()=>{
@@ -517,10 +517,36 @@ export default class Codenotch extends Extension {
         return {ok:'Connected',demo:'Demo',disabled:'Off',needsAuth:'Sign-in needed',expired:'Sign-in expired',
             unavailable:'No allowance published',rateLimited:'Rate limited',offline:'Offline',stale:'Last known'}[p.status]??p.status;
     }
+    _updatePanel() {
+        if(!this._panel||!this._snapshot)return;
+        const selected=panelAccount(this._snapshot.providers,this._settings);
+        this._panelLabel.text=selected?`${selected.name} ${percentText(headline(selected,this._settings)?.fraction,this._settings,true)}${selected.status==='stale'?' · stale':''}`:'No usage';
+        this._panelLabel.visible=!!this._settings.panelUsage;
+        this._panelLabel.set_style(selected?`color: ${band(headline(selected,this._settings).fraction)};`:'');
+        const providers=this._snapshot.providers.filter(p=>p.enabled);
+        const ids=providers.map(p=>p.id).join('|');
+        if(ids!==this._panelIDs&&!this._panel.menu.isOpen){
+            this._panelAccounts.menu.removeAll();this._panelRows.clear();
+            for(const p of providers)this._panelRows.set(p.id,this._info(this._panelAccounts.menu,''));
+            this._panelIDs=ids;
+        }
+        for(const p of providers){
+            const item=this._panelRows.get(p.id);if(!item)continue;
+            item.label.text=`${p.name} · ${this._statusLabel(p)}\n`+(p.windows??[]).map(w=>
+                `${w.label}: ${percentText(w.fraction,this._settings,true)} · ${resetCopy(w.resetsAt)}`).join('\n');
+        }
+    }
     _syncPanel() {
         if(this._settings.panelIcon&&!this._panel){
             this._panel=new PanelMenu.Button(0,'Codenotch');
-            this._panel.add_child(new St.Icon({icon_name:'utilities-system-monitor-symbolic',style_class:'system-status-icon'}));
+            const box=new St.BoxLayout({style:'spacing: 6px;'});
+            box.add_child(new St.Icon({icon_name:'utilities-system-monitor-symbolic',style_class:'system-status-icon'}));
+            this._panelLabel=new St.Label({y_align:Clutter.ActorAlign.CENTER});box.add_child(this._panelLabel);
+            this._panel.add_child(box);
+            this._panelAccounts=new PopupMenu.PopupSubMenuMenuItem('Usage overview');
+            this._panel.menu.addMenuItem(this._panelAccounts);
+            this._panelRows=new Map();
+            this._panel.menu.connect('open-state-changed',()=>this._updatePanel());
             Main.panel.addToStatusArea(this.uuid,this._panel);
             const entries=[
                 ['AI connections and settings',()=>{
@@ -535,7 +561,7 @@ export default class Codenotch extends Extension {
             for(const [label,fn] of entries){
                 const item=new PopupMenu.PopupMenuItem(label);item.connect('activate',fn);this._panel.menu.addMenuItem(item);
             }
-        }else if(!this._settings.panelIcon&&this._panel){this._panel.destroy();this._panel=null;}
+        }else if(!this._settings.panelIcon&&this._panel){this._panel.destroy();this._panel=null;this._panelIDs=null;}
     }
 
     disable() {

@@ -114,3 +114,9 @@ assert.equal(elapsedWindow({resetsAt:200,windowSeconds:200},100),.5);
 assert.equal(elapsedWindow({resetsAt:200},100),null);
 assert.equal(elapsedWindow({resetsAt:200,windowSeconds:200},201),null);
 assert.equal(band(.95),P.red);assert.equal(band(1),P.exhausted);
+
+const {panelAccount}=await import('../extension/usage.js');
+const accounts=[{...quotas,enabled:true},{id:'claude',enabled:false,windows:[{fraction:1}]}];
+assert.equal(panelAccount(accounts).id,'codex');
+assert.equal(panelAccount(accounts,{panelAccount:'claude'}).id,'codex');
+assert.equal(panelAccount([]),null);
