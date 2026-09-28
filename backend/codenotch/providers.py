@@ -106,9 +106,10 @@ def request_json(url, headers, body=None, local=False):
         raise ProviderError('error','The usage response format was not recognized.')
 
 class Provider:
-    __slots__=('id','name','kind','path')
+    __slots__=('id','name','kind','path','attempts')
     def __init__(self, id, name, kind, path):
         self.id, self.name, self.kind, self.path = id, name, kind, path
+        self.attempts=[]
     def __repr__(self):
         return f'Provider({self.id!r}, {self.kind!r})'
     def __eq__(self, other):
@@ -147,7 +148,7 @@ class Provider:
         elif self.kind=='opencode':
             token=pick_key(read_json(self.path).get('opencode-go')); url='https://opencode.ai/zen/go/v1/usage'
         elif self.kind=='gemini':
-            return antigravity_quota(home,config)
+            return antigravity_quota(home,config,self.attempts)
         else: raise ProviderError('error','Unknown provider.')
         if self.kind not in ('cursor','glm') and not token: auth_error()
         if token: headers['Authorization']='Bearer '+token
@@ -256,22 +257,29 @@ def agy_cli_quota(home):
         pass
     return None
 
-def antigravity_quota(home,config):
+def antigravity_quota(home,config,attempts=None):
     """Prefer the running language server; fall back to the CLI, then cloud quota."""
+    attempts=[] if attempts is None else attempts
     endpoints=bridge_endpoints()
     for port,token in endpoints:
         try:
             body=request_json(f'https://127.0.0.1:{port}/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary',{'x-codeium-csrf-token':token,'Content-Type':'application/json'},{'forceRefresh':True},True)
-            return PARSERS['gemini'](body,time.time())
-        except ProviderError: pass
+            windows=PARSERS['gemini'](body,time.time())
+            attempts.append(dict(route='antigravity-local',state='ok'))
+            return windows
+        except ProviderError as err: attempts.append(dict(route='antigravity-local',state=err.status))
     windows=agy_cli_quota(home)
+    attempts.append(dict(route='antigravity-cli',state='ok' if windows else 'unavailable'))
     if windows: return windows
     token=keyring_token()
     if token:
         try:
             body=request_json(CLOUD_QUOTA,{'Authorization':'Bearer '+token,'Content-Type':'application/json'},{})
-            return PARSERS['gemini'](body,time.time())
+            windows=PARSERS['gemini'](body,time.time())
+            attempts.append(dict(route='antigravity-cloud',state='ok'))
+            return windows
         except ProviderError as err:
+            attempts.append(dict(route='antigravity-cloud',state=err.status))
             if err.status=='forbidden':
                 raise ProviderError('unavailable','Signed in to Antigravity, but Google does not expose this account’s allowance to other apps. Start Antigravity to read the local quota.')
             raise

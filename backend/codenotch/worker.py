@@ -199,8 +199,10 @@ def fetch_provider(p,base,old,settings,home,config,data):
     cadence=settings['pollSeconds'] if base.get('sessions') else settings['idlePollSeconds']
     try:
         windows=p.fetch(home,config,data)
+        base['attempts']=p.attempts or [dict(route='endpoint',state='ok')]
         return {**base,'status':'ok','windows':windows,'message':'Connection verified. Usage returned by the provider.','updatedAt':now,'checkedAt':now,'nextPoll':now+cadence,'retryAt':0,'failures':0}
     except ProviderError as err:
+        base['attempts']=p.attempts or [dict(route='endpoint',state=err.status)]
         count=min(10,old.get('failures',0)+1)
         delay=max(60*2**min(count-1,4),err.retry) if err.status=='rateLimited' else max(60,cadence)
         return {**base,'status':'stale' if old.get('windows') else err.status,'errorStatus':err.status,'message':err.message,'windows':old.get('windows',[]),'checkedAt':now,'nextPoll':now+delay,'retryAt':now+delay if err.status=='rateLimited' else 0,'failures':count}
@@ -235,6 +237,9 @@ def collect(args):
             memory['pending']=[e for e in memory.get('pending',[]) if e['id'] not in ids]
             atomic_json(root/'alerts.json',memory)
         return info_snapshot(providers,settings,old,widget_cache)
+    if getattr(args,'diagnostics',False):
+        from .diagnostics import report
+        return {'report':report(info_snapshot(providers,settings,old,widget_cache)['providers'],time.time())}
     if args.info:
         return info_snapshot(providers,settings,old,widget_cache)
     with Lock(root/'poll.lock',blocking=False) as poll:
@@ -278,6 +283,7 @@ def safe_widgets(settings,cache,force):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--diagnostics',action='store_true',help='Safe connection report; cache only')
     parser.add_argument('--ack-alerts',help='Acknowledge delivered alert IDs')
     parser.add_argument('--snapshot',action='store_true'); parser.add_argument('--demo',action='store_true')
     parser.add_argument('--info',action='store_true'); parser.add_argument('--verify',metavar='PROVIDER',help='Provider ID or all; respects Retry-After')

@@ -87,6 +87,7 @@ case "${1:-settings}" in
   enable) exec gnome-extensions enable "$UUID" ;;
   disable) exec gnome-extensions disable "$UUID" ;;
   settings) exec gnome-extensions prefs "$UUID" ;;
+  diagnostics) exec "$WORKER" --diagnostics ;;
   status) exec "$WORKER" --info ;;
   verify) exec "$WORKER" --verify "${2:-all}" ;;
   demo) exec "$WORKER" --set demo "${2:-true}" ;;

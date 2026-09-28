@@ -336,3 +336,8 @@ yellow, orange, red at 90%, and deep red when exhausted.
 The top panel can show a chosen account's quota or automatically select the most-used
 account. Its Usage overview lists all enabled accounts and reset times from cached
 readings, without extra requests. Configure it under Appearance.
+
+`codenotch diagnostics` produces a cache-only, allowlisted connection report.
+Connections → Copy report copies the same report. It excludes account labels, paths,
+project/session data and credentials, and separates the latest check from the last
+successful reading. Antigravity records its local/CLI/cloud fallback outcomes.

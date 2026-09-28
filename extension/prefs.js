@@ -1,5 +1,6 @@
 import Adw from 'gi://Adw';
 import Gtk from 'gi://Gtk';
+import Gdk from 'gi://Gdk';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
@@ -109,6 +110,7 @@ export default class CodenotchPreferences extends ExtensionPreferences {
             const source=new Adw.ActionRow({title:'Usage source',subtitle:p.source??'Local tool sign-in'});row.add_row(source);
             const status=new Adw.ActionRow({title:'Connection status',subtitle:p.message??'Not verified yet'});row.add_row(status);
             const usage=new Adw.ActionRow({title:'Usage windows',subtitle:'No reading yet'});row.add_row(usage);
+            const diagnostic=new Adw.ActionRow({title:'Latest check and routes',subtitle:'Not checked'});row.add_row(diagnostic);
             const checked=new Adw.ActionRow({title:'Last successful reading',subtitle:'Never'});row.add_row(checked);
             const verifyRow=new Adw.ActionRow({title:'Verify connection',subtitle:'Checks the saved sign-in and requests fresh usage.'});
             const button=new Gtk.Button({label:'Verify',valign:Gtk.Align.CENTER});verifyRow.add_suffix(button);row.add_row(verifyRow);
@@ -121,9 +123,14 @@ export default class CodenotchPreferences extends ExtensionPreferences {
                 if(keys[pin.selected])pins[p.id]=keys[pin.selected];else delete pins[p.id];
                 this._settings.pinnedWindows=pins;this._set('pinnedWindows',pins);
             });
-            this._rows.set(p.id,{row,toggle,status,usage,checked,button,pin,pinKeys:[]});
+            this._rows.set(p.id,{row,toggle,status,usage,checked,button,pin,pinKeys:[],diagnostic});
         }
 
+        const diagnosticRow=new Adw.ActionRow({title:'Share connection diagnostics',subtitle:'Excludes account names, paths, sessions and credentials.'});
+        const copy=new Gtk.Button({label:'Copy report',valign:Gtk.Align.CENTER});diagnosticRow.add_suffix(copy);this._general.add(diagnosticRow);
+        copy.connect('clicked',()=>this._run(['--diagnostics'],result=>{
+            if(result){Gdk.Display.get_default().get_clipboard().set(JSON.stringify(result.report,null,2));copy.set_label('Copied');}
+        }));
         // ------------------------------------------------------------ polling
         this._combo(this._general,'Usage refresh','How often a signed-in AI is asked for fresh usage while you are working.',
             ['Every minute','Every 90 seconds','Every 2½ minutes (recommended)','Every 5 minutes','Every 10 minutes'],
@@ -273,6 +280,7 @@ export default class CodenotchPreferences extends ExtensionPreferences {
             r.row.set_subtitle(p.status??'Not checked');
             r.status.set_subtitle(p.message??'Not verified yet');
             r.usage.set_subtitle((p.windows??[]).map(w=>`${w.label}: ${Math.round(w.fraction*100)}% used`).join('\n')||'No usage reported');
+            r.diagnostic.set_subtitle(`${p.checkedAt?new Date(p.checkedAt*1000).toLocaleString():'Never'}${p.retryAt>Date.now()/1000?' · waiting for retry deadline':''}\n${(p.attempts??[]).map(a=>`${a.route}: ${a.state}`).join(' → ')}`);
             r.checked.set_subtitle(p.updatedAt?new Date(p.updatedAt*1000).toLocaleString():'Never');
             r.button.set_sensitive(p.enabled);
         }

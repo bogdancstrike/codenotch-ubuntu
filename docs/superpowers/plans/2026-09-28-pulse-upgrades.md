@@ -14,7 +14,7 @@
 - [x] Activity: `backend/codenotch/activity.py` and tests. Read bounded Codex transcript tails for lifecycle events with a timeout for abandoned turns; support current state database discovery. Never expose transcript contents.
 - [x] Presentation: used/remaining setting, critical/exhausted colors, optional window clock. Keep ring geometry and percentage semantics consistent. Retain only provider-reported durations. Node and parser tests.
 - [x] Panel dashboard: selected/automatic account summary and per-account windows in the GNOME panel. Cache-only menu updates and disabled-account filtering. Test pure selection/formatting.
-- [ ] Diagnostics: allowlisted CLI report and preferences copy action, latest-check vs last-good distinction, bounded fallback attempt records. Verify reports exclude paths, labels, sessions and credentials.
+- [x] Diagnostics: allowlisted CLI report and preferences copy action, latest-check vs last-good distinction, bounded fallback attempt records. Verify reports exclude paths, labels, sessions and credentials.
 - [ ] Forecast: pure optional forecast from reported duration, fraction and reset; suppress early, expired and stale estimates. Test expected exhaustion and no-duration cases.
 - [ ] Accounts: multiple Codex/Grok profiles and configurable labels; credential paths remain owned by tools. Tests cover discovery, custom paths and disabled accounts.
 - [ ] Providers: opt-in Copilot and Kimi adapters using existing local credentials, defensive parsers and fixture tests. Document required login sources and live-validation limits.
