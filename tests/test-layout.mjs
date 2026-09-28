@@ -127,3 +127,9 @@ assert.match(forecast({fraction:.9,resetsAt:1000,windowSeconds:1000},500),/May r
 assert.equal(forecast({fraction:.9,resetsAt:1000,windowSeconds:1000},1),null);
 assert.equal(forecast({fraction:.9,resetsAt:1000},500),null);
 assert.equal(cardLayout({status:'stale',windows:[{fraction:.9,resetsAt:Date.now()/1000+500,windowSeconds:1000}]},650,{forecast:true}).forecasts[0],null);
+
+const {calendarDays}=await import('../extension/history-model.js');
+const grid=calendarDays({days:[{date:'2026-09-28',tokens:100}]},new Date(2026,8,28));
+assert.equal(grid[0].weekday,0);assert.equal(grid.at(-1).tokens,100);
+assert.equal(grid.at(-2).tokens,null);assert.equal(grid.at(-1).level,4);
+assert(grid.length>=365&&grid.length<=371);

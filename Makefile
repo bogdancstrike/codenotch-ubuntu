@@ -9,6 +9,9 @@ check:
 	node --check extension/extension.js
 	node --check extension/prefs.js
 	node --check extension/render.js
+	node --check extension/usage.js
+	node --check extension/history-view.js
+	node --check extension/history-model.js
 
 # Redraws docs/preview*.png through the extension's own renderer. The gjs pass
 # uses the real Pango text engine, so it doubles as a load-and-draw smoke test.

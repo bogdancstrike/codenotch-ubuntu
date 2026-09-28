@@ -373,3 +373,11 @@ Protocol references: [Copilot](https://github.com/qunqin24/Pulse/blob/0dd51fb/So
 Custom quota adapters can be installed without changing CodeNotch. See
 [the versioned program contract](docs/custom-providers.md). They are disabled until
 you enable them in Connections, and execute only in the bounded Python worker.
+
+## Usage tab
+
+**Settings → Usage** provides a GitHub-style daily contribution grid aggregated across
+local LLM token records, selectable day details, and model totals. Enable local history
+there to read Claude Code, Codex and OpenCode records, or supply imports from other
+clients. Refresh scans incrementally; normal notch polling does not scan token history.
+Use `codenotch usage` for the same JSON report. [Coverage, imports and cost estimates](docs/usage-history.md).

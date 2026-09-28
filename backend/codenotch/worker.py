@@ -29,7 +29,7 @@ DEFAULTS=dict(
     widgets=['clock','date'],
     clock24=True,clockSeconds=False,dateStyle='medium',
     weatherPlace='',weatherLat=None,weatherLon=None,weatherUnits='metric',
-    textContrast='high',pinnedWindows={},accountProfiles=[],accountLabels={},enabledExtras=[],enabledExtensions=[],
+    textContrast='high',pinnedWindows={},accountProfiles=[],accountLabels={},enabledExtras=[],enabledExtensions=[],usageHistory=False,historyDays=365,modelPrices={},
     forecast=False,quotaDisplay='used',windowClock=False,panelUsage=True,panelAccount='',
     notifyQuota=False,notifyReset=False,notifyFailures=False,notifyThreshold=90,
 )
@@ -104,6 +104,11 @@ def configuration(config):
     if not isinstance(out['scale'],(int,float)) or not 0.75<=out['scale']<=2: out['scale']=1.0
     if not isinstance(out['monitor'],int): out['monitor']=-1
     out['widgets']=clamp_widgets(out['widgets'])
+    if out['historyDays'] not in (7,30,90,365): out['historyDays']=365
+    if out.get('modelPrices'):
+        from .history import clean_prices
+        out['modelPrices']=clean_prices(out['modelPrices'])
+    elif not isinstance(out['modelPrices'],dict): out['modelPrices']={}
     out['enabledExtensions']=[x for x in out['enabledExtensions'] if isinstance(x,str) and x.startswith('extension:')] if isinstance(out['enabledExtensions'],list) else []
     out['enabledExtras']=[x for x in out['enabledExtras'] if x in ('copilot','kimi')] if isinstance(out['enabledExtras'],list) else []
     out['accountProfiles']=clean_profiles(out['accountProfiles'])
@@ -123,7 +128,7 @@ def configuration(config):
     if not isinstance(out['panelAccount'],str): out['panelAccount']=''
     if out['quotaDisplay'] not in ('used','remaining'): out['quotaDisplay']='used'
     if out['notifyThreshold'] not in (75,80,90,95): out['notifyThreshold']=90
-    for key in ('forecast','panelUsage','windowClock','notifyQuota','notifyReset','notifyFailures','demo','panelIcon','hideFullscreen','peek','clock24','clockSeconds'):
+    for key in ('usageHistory','forecast','panelUsage','windowClock','notifyQuota','notifyReset','notifyFailures','demo','panelIcon','hideFullscreen','peek','clock24','clockSeconds'):
         out[key]=bool(out[key])
     return out
 
@@ -235,6 +240,10 @@ def collect(args):
     if args.search:
         return dict(version=__version__,query=args.search,results=widget_module.search_places(args.search))
     providers=discover(home,config,data,settings)
+    if getattr(args,'history',False):
+        from .history import collect as history_collect
+        with Lock(root/'history.lock'):
+            return history_collect(root,providers,data,settings,lambda p:is_enabled(p,settings),not settings['demo'])
     if args.demo or settings['demo']:
         return demo_snapshot(providers,settings,root)
     archive=read_json(root/'usage.json'); old={p['id']:p for p in archive.get('providers',[]) if isinstance(p,dict) and 'id' in p}
@@ -294,6 +303,7 @@ def safe_widgets(settings,cache,force):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--history',action='store_true',help='Incremental local usage ledger; no provider requests')
     parser.add_argument('--diagnostics',action='store_true',help='Safe connection report; cache only')
     parser.add_argument('--ack-alerts',help='Acknowledge delivered alert IDs')
     parser.add_argument('--snapshot',action='store_true'); parser.add_argument('--demo',action='store_true')

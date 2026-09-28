@@ -5,6 +5,8 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
+import {UsagePage} from './history-view.js';
+
 const REPOSITORY='https://github.com/bogdancstrike/codenotch-ubuntu';
 
 // Canonical widget order; the notch draws them in this sequence.
@@ -26,7 +28,9 @@ export default class CodenotchPreferences extends ExtensionPreferences {
         const widgets=new Adw.PreferencesPage({title:'Widgets',icon_name:'preferences-desktop-symbolic'});
         const appearance=new Adw.PreferencesPage({title:'Appearance',icon_name:'preferences-desktop-appearance-symbolic'});
         const about=new Adw.PreferencesPage({title:'About',icon_name:'help-about-symbolic'});
-        for(const page of [connections,widgets,appearance,about])window.add(page);
+        this._usage=new UsagePage(this);
+        for(const page of [connections,widgets,appearance,this._usage.page,about])window.add(page);
+        window.connect('notify::visible-page',()=>{if(window.get_visible_page()===this._usage.page&&this._settings)this._usage.load();});
 
         this._integrations=new Adw.PreferencesGroup({title:'AI integrations',description:'Choose the AIs shown in your notch. Verification uses the login already held by each tool.'});
         connections.add(this._integrations);
@@ -47,7 +51,7 @@ export default class CodenotchPreferences extends ExtensionPreferences {
         this._install=new Adw.PreferencesGroup({title:'This install'});about.add(this._install);
         this._care=new Adw.PreferencesGroup({title:'Privacy and maintenance'});about.add(this._care);
 
-        window.connect('close-request',()=>{this._alive=false;this._process?.force_exit();return false;});
+        window.connect('close-request',()=>{this._alive=false;this._usage?.destroy();this._process?.force_exit();return false;});
         this._run(['--info'],data=>{if(data)this._build(data);});
     }
 
@@ -213,6 +217,7 @@ export default class CodenotchPreferences extends ExtensionPreferences {
         this._combo(this._readability,'Text contrast','Lifts the secondary labels in the notch and its cards.',
             ['Standard','High (recommended)','Highest'],['normal','high','higher'],s.textContrast,v=>this._set('textContrast',v));
 
+        this._usage.sync(s);
         this._buildAbout(data);
         this._update(data);
     }
@@ -309,7 +314,7 @@ export default class CodenotchPreferences extends ExtensionPreferences {
             r.button.set_sensitive(p.enabled);
         }
         if(data.settings&&!this._writes){
-            this._settings=data.settings;
+            this._settings=data.settings;this._usage.sync(data.settings);
             this._current?.set_subtitle(data.settings.weatherPlace||'Not set — search above');
             this._refreshAbout(data.settings);
             for(const [id,toggle] of this._widgetSwitches??[])toggle.active=(data.settings.widgets??[]).includes(id);
