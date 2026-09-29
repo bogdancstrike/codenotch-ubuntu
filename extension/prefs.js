@@ -20,7 +20,7 @@ const WIDGETS=[
 
 export default class CodenotchPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
-        window.set_default_size(680,860);window.set_title('Codenotch Settings');
+        window.set_default_size(1100,860);window.set_title('Codenotch Settings');
         this._window=window;this._alive=true;this._writeJobs=new Set();this._rows=new Map();this._queue=[];this._busy=false;this._results=[];
         Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.FORCE_DARK);
 

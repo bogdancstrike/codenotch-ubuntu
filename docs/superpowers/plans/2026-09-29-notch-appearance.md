@@ -22,6 +22,8 @@
 
 ### Task 3: Wider settings
 
-- [ ] Set the preferences window default width to 1100 in `extension/prefs.js`, retaining height 860 and window resizing.
-- [ ] Inspect the Usage page's native content clamp and ensure the full annual calendar fits. Match the smoke test's width to the preferences default in `scripts/test-usage-view.js`.
-- [ ] Run `make check` and the native Usage smoke test. Inspect the rendered preview for clipping. Commit and push task 3.
+- [x] Set the preferences window default width to 1100 in `extension/prefs.js`, retaining height 860 and window resizing.
+- [x] Inspect the Usage page's native content clamp and ensure the full annual calendar fits. Match the smoke test's width to the preferences default in `scripts/test-usage-view.js`.
+- [x] Run `make check` and the native Usage smoke test. Inspect the rendered preview for clipping. Commit and push task 3.
+
+Validation: 83 Python tests and layout checks passed. Native Usage smoke test confirms the annual calendar fits at 1100px and saves a rendered preview. Capture precedes day selection because selection invalidates GTK allocations until the next frame.

@@ -7,7 +7,7 @@ const app=new Adw.Application({application_id:'local.codenotch.UsageSmoke'});
 let failed=false;
 app.connect('activate',()=>{
     try{
-        const window=new Adw.PreferencesWindow({application:app,default_width:780,default_height:860});
+        const window=new Adw.PreferencesWindow({application:app,default_width:1100,default_height:860});
         const owner={_alive:true,_window:window,_settings:{},_set(){},_run(){},
             _fact(group,title,subtitle){const row=new Adw.ActionRow({title,subtitle});group.add(row);return row;},
             _toggle(group,title,subtitle,state,change){const row=new Adw.ActionRow({title,subtitle});const toggle=new Gtk.Switch({active:state,valign:Gtk.Align.CENTER});row.add_suffix(toggle);toggle.connect('notify::active',()=>{if(!this._syncing)change(toggle.active);});group.add(row);return toggle;}};
@@ -25,11 +25,14 @@ app.connect('activate',()=>{
         GLib.timeout_add(GLib.PRIORITY_DEFAULT,1000,()=>{
             try{
                 if(view.buttons.length<365)throw Error('Missing calendar days');
+                const grid=view.gridBox.get_first_child();
+                if(grid.get_width()>view.gridBox.get_width())throw Error('Calendar exceeds the available content width');
+                const snapshot=new Gtk.Snapshot();window.snapshot_child(window.get_child(),snapshot);
+                const node=snapshot.to_node();
+                if(!node)throw Error('Usage preview did not render');
+                window.get_renderer().render_texture(node,null).save_to_png('/tmp/codenotch-usage-preview.png');
                 view.buttons.at(-1).emit('clicked');
                 if(!view.selected)throw Error('Day selection failed');
-                const paintable=new Gtk.WidgetPaintable({widget:window});const snapshot=new Gtk.Snapshot();
-                paintable.snapshot(snapshot,window.get_width(),window.get_height());
-                const node=snapshot.to_node();if(node)window.get_renderer().render_texture(node,null).save_to_png('/tmp/codenotch-usage-preview.png');
                 print(`Usage page rendered: ${view.buttons.length} days; day selection works; width ${window.get_width()}`);
             }catch(error){printerr(error);failed=true;}
             view.destroy();window.close();app.quit();return GLib.SOURCE_REMOVE;
