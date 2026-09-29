@@ -448,7 +448,7 @@ export default class Codenotch extends Extension {
                 const data=JSON.parse(stdout);
                 if(data.error)throw Error(data.error);
                 this._accept(data);
-            }catch(e){if(!cancel.is_cancelled())this._showError('Could not read usage. Try Verify all connections.');}
+            }catch(e){if(!cancel.is_cancelled())this._showError('Could not read usage. Open Settings → Connections and try Verify all.');}
             if(this._queued.length)this._run(this._queued.shift());
         });
     }
@@ -531,9 +531,6 @@ export default class Codenotch extends Extension {
             this._menuRows.set(p.id,{sub,toggle,status,source,checked,usage,verify});
         }
         this._menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-        const verifyAll=new PopupMenu.PopupMenuItem('Verify all enabled connections');
-        verifyAll.connect('activate',()=>{this._statusItem.label.text='Verifying enabled connections…';this._run(['--verify','all']);});
-        this._menu.addMenuItem(verifyAll);
         const prefs=new PopupMenu.PopupMenuItem('Widgets, appearance and more…');
         prefs.connect('activate',()=>this._openPreferences());this._menu.addMenuItem(prefs);
         this._updateMenu();this._syncPanel();
@@ -598,7 +595,6 @@ export default class Codenotch extends Extension {
                     this._settings.visibility='always'===this._settings.visibility?'always':'hover';
                     this._layout();this._expand();this._menu.open();
                 }],
-                ['Refresh now',()=>this._run(['--verify','all'])],
                 ['Widgets and appearance…',()=>this._openPreferences()],
             ];
             for(const [label,fn] of entries){

@@ -16,9 +16,9 @@
 
 ### Task 2: Bulk verification in settings
 
-- [ ] In `extension/extension.js`, remove the notch's `Verify all enabled connections` item and the panel's `Refresh now` item, both of which invoke `--verify all`.
-- [ ] Point the worker-read error message at Connections settings. Preserve the settings page's `Verify all` button and individual verification controls.
-- [ ] Document the location in `README.md`. Run `make check` and inspect all bulk verification references. Commit and push task 2.
+- [x] In `extension/extension.js`, remove the notch's `Verify all enabled connections` item and the panel's `Refresh now` item, both of which invoke `--verify all`.
+- [x] Point the worker-read error message at Connections settings. Preserve the settings page's `Verify all` button and individual verification controls.
+- [x] Document the location in `README.md`. Run `make check` and inspect all bulk verification references. Commit and push task 2.
 
 ### Task 3: Wider settings
 

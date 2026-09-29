@@ -124,6 +124,8 @@ Four pages, all native libadwaita.
 **Connections** — a row per AI with its usage source, connection status, allowance windows,
 last successful reading, and a **Verify** button that actually performs the request.
 Usage refresh (60 s to 10 min, default 2½ min), idle refresh, demo mode, and *Verify all*.
+Bulk verification is available here in settings; the notch and top-bar menus do not
+offer a bulk verification shortcut.
 
 **Widgets** — the five widgets above, clock format and seconds, date style, weather location
 search, and units.
