@@ -116,7 +116,8 @@ export function stagger(progress,index,count,share=.42) {
 }
 
 // ---------------------------------------------------------------- geometry
-export const WIDGET_EXTENT={clock:[30,64],date:[40,66],weather:[50,64],battery:[34,54],system:[78,62],cpu:[40,64],memory:[40,64],storage:[40,64],network:[52,86],uptime:[40,72],temperature:[40,64]};
+export const WIDGET_EXTENT={clock:[30,64],date:[40,66],weather:[50,64],battery:[34,54],system:[78,62],cpu:[40,64],memory:[40,64],storage:[40,64],network:[52,86],uptime:[40,72],
+    load:[40,64],swap:[40,64],processes:[40,72],diskio:[52,86],wifi:[40,64],sun:[40,72],utc:[40,64],moon:[44,64],progress:[40,64],temperature:[40,64]};
 function widgetExtent(kind,vertical) {return (WIDGET_EXTENT[kind]??WIDGET_EXTENT.clock)[vertical?0:1];}
 
 /** Ordered cells for the notch: providers, then widgets, then the settings gear. */
@@ -217,6 +218,17 @@ function batteryIcon(cr,x,y,w,h,fraction,charging,alpha) {
     const hex=fraction<=.15?P.orange:charging?P.green:P.white;
     color(cr,hex,alpha);roundRect(cr,x+1.7,y+1.7,Math.max(1.5,(w-5.4)*clamp(fraction)),h-3.4,Math.max(.5,h*.2));cr.fill();
 }
+// Lit part of the disc: the terminator is an ellipse whose width follows the phase.
+function moonIcon(cr,cx,cy,r,phase,alpha) {
+    color(cr,P.bar,alpha);cr.newPath();cr.arc(cx,cy,r,0,Math.PI*2);cr.fill();
+    const lit=Math.cos(2*Math.PI*phase),waxing=phase<.5;
+    color(cr,'#F4F1E4',alpha);cr.newPath();
+    if(waxing)cr.arc(cx,cy,r,-Math.PI/2,Math.PI/2);else cr.arcNegative(cx,cy,r,-Math.PI/2,Math.PI/2);
+    cr.save();cr.translate(cx,cy);cr.scale(Math.max(.001,Math.abs(lit)),1);
+    const outward=(lit>0)===waxing;
+    if(outward)cr.arcNegative(0,0,r,Math.PI/2,-Math.PI/2);else cr.arc(0,0,r,Math.PI/2,-Math.PI/2);
+    cr.restore();cr.closePath();cr.fill();
+}
 function meter(cr,x,y,w,fraction,hex,alpha) {
     color(cr,P.bar,alpha);roundRect(cr,x,y,w,3.4,1.7);cr.fill();
     color(cr,hex,alpha);roundRect(cr,x,y,Math.max(2,w*clamp(fraction)),3.4,1.7);cr.fill();
@@ -228,11 +240,49 @@ export function byteText(value) {
     while(value>=1024&&i<units.length-1){value/=1024;i++;}
     return `${value.toFixed(i&&value<100?1:0)} ${units[i]}`;
 }
-export function widgetValue(kind,data={}) {
+const two=n=>String(n).padStart(2,'0');
+export function utcParts(now=new Date()) {
+    const minutes=-now.getTimezoneOffset(),sign=minutes<0?'−':'+';
+    return {time:`${two(now.getUTCHours())}:${two(now.getUTCMinutes())}`,
+        offset:minutes?`UTC${sign}${Math.floor(Math.abs(minutes)/60)}${Math.abs(minutes)%60?':'+two(Math.abs(minutes)%60):''}`:'UTC'};
+}
+// Mean synodic month from the 2000-01-06 18:14 UTC new moon; accurate to about a day.
+const SYNODIC=29.530588853,NEW_MOON=Date.UTC(2000,0,6,18,14);
+export function moonPhase(now=new Date()) {
+    const age=(((now-NEW_MOON)/86400000)%SYNODIC+SYNODIC)%SYNODIC,phase=age/SYNODIC;
+    const names=['New moon','Waxing crescent','First quarter','Waxing gibbous','Full moon','Waning gibbous','Last quarter','Waning crescent'];
+    return {phase,age,illumination:(1-Math.cos(2*Math.PI*phase))/2,name:names[Math.floor(phase*8+.5)%8],
+        nextFull:new Date(now.getTime()+((.5-phase+1)%1)*SYNODIC*86400000)};
+}
+export function periodProgress(now=new Date()) {
+    const span=(start,end)=>clamp((now-start)/(end-start));
+    const y=now.getFullYear(),m=now.getMonth(),d=now.getDate(),monday=d-(now.getDay()+6)%7;
+    return {day:span(new Date(y,m,d),new Date(y,m,d+1)),week:span(new Date(y,m,monday),new Date(y,m,monday+7)),
+        month:span(new Date(y,m,1),new Date(y,m+1,1)),year:span(new Date(y,0,1),new Date(y+1,0,1))};
+}
+// The next of sunrise/sunset, by the local clock's HH:MM.
+export function nextSunEvent(data={},now=new Date()) {
+    const clock=`${two(now.getHours())}:${two(now.getMinutes())}`;
+    if(!data?.sunrise||!data?.sunset)return null;
+    return clock<data.sunrise||clock>=data.sunset?{name:'Sunrise',time:data.sunrise}:{name:'Sunset',time:data.sunset};
+}
+const percent=value=>Number.isFinite(value)?`${Math.round(value*100)}%`:'—';
+const SHORT_TITLES={cpu:'CPU',memory:'RAM',storage:'DISK',network:'NET ↓/s',uptime:'UPTIME',temperature:'CPU TEMP',
+    load:'LOAD',swap:'SWAP',processes:'PROCS',diskio:'DISK I/O',wifi:'WI-FI',sun:'SUN',utc:'UTC',moon:'MOON',progress:'DAY'};
+export function widgetValue(kind,data={},now=new Date()) {
     const s=data??{},key={cpu:'cpu',memory:'mem',storage:'disk'}[kind];
     if(key)return Number.isFinite(s[key])?`${Math.round(s[key]*100)}%`:'—';
     if(kind==='temperature')return Number.isFinite(s.celsius)?`${Math.round(s.celsius)}°C`:'—';
     if(kind==='network')return byteText(s.download).replace(' ','');
+    if(kind==='load')return Number.isFinite(s.one)?s.one.toFixed(2):'—';
+    if(kind==='swap')return s.total===0?'Off':percent(s.fraction);
+    if(kind==='processes')return Number.isFinite(s.total)?String(s.total):'—';
+    if(kind==='diskio')return Number.isFinite(s.read)?byteText(s.read+s.write).replace(' ',''):'—';
+    if(kind==='wifi')return percent(s.quality);
+    if(kind==='sun')return nextSunEvent(s,now)?.time??'—';
+    if(kind==='utc')return utcParts(now).time;
+    if(kind==='moon')return percent(moonPhase(now).illumination);
+    if(kind==='progress')return percent(Math.floor(periodProgress(now).day*100)/100);
     if(kind==='uptime')return Number.isFinite(s.seconds)?s.seconds>=86400?`${Math.floor(s.seconds/86400)}d ${Math.floor(s.seconds%86400/3600)}h`:`${Math.floor(s.seconds/3600)}h ${Math.floor(s.seconds%3600/60)}m`:'—';
     return '—';
 }
@@ -243,12 +293,19 @@ export function drawWidget(cr,kind,data,settings,g,edge,cell,alpha,now=new Date(
     const at=(alongOffset,acrossOffset=0)=>point(g,edge,mid+alongOffset,across+acrossOffset);
     const dim=tone(settings,'dim'),muted=tone(settings,'muted');
     const horizontal=!g.vertical;
-    if(['cpu','memory','storage','network','uptime','temperature'].includes(kind)){
-        const title={cpu:'CPU',memory:'RAM',storage:'DISK',network:'NET ↓/s',uptime:'UPTIME',temperature:'CPU TEMP'}[kind];
+    if(kind==='moon'){
+        const m=moonPhase(now);
+        const [ix,iy]=at(horizontal?0:-half+13,horizontal?-8:0);moonIcon(cr,ix,iy,8,m.phase,alpha);
+        const [vx,vy]=at(horizontal?0:half-8);
+        text(cr,widgetValue(kind,data,now),vx,vy+(horizontal?16:0),12,dim,'center',W.semi,{alpha});
+        return;
+    }
+    if(SHORT_TITLES[kind]){
+        const title=kind==='sun'?(nextSunEvent(data,now)?.name.toUpperCase()??'SUN'):SHORT_TITLES[kind];
         const [x,y]=at(horizontal?0:-half+12);
         text(cr,title,x,y+(horizontal?-4:0),9,muted,'center',W.semi,{alpha});
         const [vx,vy]=at(horizontal?0:half-8);
-        text(cr,widgetValue(kind,data),vx,vy+(horizontal?14:0),13,dim,'center',W.semi,{alpha});
+        text(cr,widgetValue(kind,data,now),vx,vy+(horizontal?14:0),13,dim,'center',W.semi,{alpha});
         return;
     }
     if(kind==='clock'){
@@ -470,8 +527,51 @@ export function widgetCard(kind,data,settings={},now=new Date()) {
         if(!Number.isFinite(b.percent))return {title:'Battery',headline:'No system battery',rows:[]};
         return {title:'Battery',headline:`${b.percent}%`,rows:[['State',b.state??(b.charging?'Charging':'Discharging')],['Source',b.name??'BAT0']]};
     }
+    const s=data??{},date=value=>value.toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'});
+    if(kind==='load'){
+        if(!Number.isFinite(s.one))return {title:'Load average',headline:'Reading unavailable',rows:[]};
+        return {title:'Load average',headline:`${s.one.toFixed(2)} · last minute`,rows:[['5 minutes',s.five.toFixed(2)],['15 minutes',s.fifteen.toFixed(2)],
+            ['CPU threads',String(s.cores)],['Per thread',`${Math.round(s.one/Math.max(1,s.cores)*100)}% of capacity`]]};
+    }
+    if(kind==='swap'){
+        if(!Number.isFinite(s.total))return {title:'Swap',headline:'Reading unavailable',rows:[]};
+        if(!s.total)return {title:'Swap',headline:'No swap configured',rows:[]};
+        return {title:'Swap',headline:`${percent(s.fraction)} used`,rows:[['Used',`${s.used} GiB`],['Total',`${s.total} GiB`]]};
+    }
+    if(kind==='processes'){
+        if(!Number.isFinite(s.total))return {title:'Processes',headline:'Reading unavailable',rows:[]};
+        return {title:'Processes',headline:`${s.total} tasks`,rows:[['Running now',String(s.running)],['Includes','Processes and threads']]};
+    }
+    if(kind==='diskio'){
+        if(!Number.isFinite(s.read))return {title:'Disk activity',headline:'Measuring…',rows:[['Status','Waiting for two samples']]};
+        return {title:'Disk activity',headline:`${byteText(s.read+s.write)}/s`,rows:[['Read',`${byteText(s.read)}/s`],['Write',`${byteText(s.write)}/s`],
+            ['Disks',(s.disks??[]).join(', ')||'None']]};
+    }
+    if(kind==='wifi'){
+        if(!Number.isFinite(s.quality))return {title:'Wi-Fi',headline:'No wireless link',rows:[['Status','No connected wireless interface']]};
+        return {title:'Wi-Fi',headline:`${percent(s.quality)} link quality`,rows:[['Signal',Number.isFinite(s.signal)?`${s.signal} dBm`:'Not reported'],['Interface',s.interface]]};
+    }
+    if(kind==='sun'){
+        const next=nextSunEvent(s,now);
+        if(!next)return {title:'Sunrise and sunset',headline:'No reading',rows:[['Status',s.message||'Choose a weather location in settings.']]};
+        const minutes=value=>Number(value.slice(0,2))*60+Number(value.slice(3,5)),light=minutes(s.sunset)-minutes(s.sunrise);
+        return {title:'Sunrise and sunset',headline:`${next.name} ${next.time}`,rows:[['Sunrise',s.sunrise],['Sunset',s.sunset],
+            ['Daylight',`${Math.floor(light/60)} h ${light%60} min`],['Place',s.place||'Weather location']]};
+    }
+    if(kind==='utc'){
+        const u=utcParts(now);
+        return {title:'UTC',headline:u.time,rows:[['Date',now.toLocaleDateString(undefined,{timeZone:'UTC',weekday:'long',day:'numeric',month:'long'})],['Local offset',u.offset]]};
+    }
+    if(kind==='moon'){
+        const m=moonPhase(now);
+        return {title:'Moon',headline:m.name,rows:[['Illuminated',percent(m.illumination)],['Age',`${m.age.toFixed(1)} days`],['Next full moon',date(m.nextFull)]]};
+    }
+    if(kind==='progress'){
+        const p=periodProgress(now),floor=value=>`${Math.floor(value*100)}%`;
+        return {title:'Progress',headline:`${floor(p.day)} of today`,rows:[['This week',floor(p.week)],['This month',floor(p.month)],[String(now.getFullYear()),floor(p.year)]]};
+    }
     if(['cpu','memory','storage','network','uptime','temperature'].includes(kind)){
-        const s=data??{},title={cpu:'CPU',memory:'Memory',storage:'Storage',network:'Network traffic',uptime:'Uptime',temperature:'CPU temperature'}[kind];
+        const title={cpu:'CPU',memory:'Memory',storage:'Storage',network:'Network traffic',uptime:'Uptime',temperature:'CPU temperature'}[kind];
         if(kind==='cpu')rows.push(['Sampling','Between worker readings']);
         if(kind==='memory'&&Number.isFinite(s.memFree))rows.push(['Available',`${s.memFree} GiB`],['Total',`${s.memTotal} GiB`]);
         if(kind==='storage'&&Number.isFinite(s.diskFree))rows.push(['Available',`${s.diskFree} GiB`],['Total',`${s.diskTotal} GiB`],['Filesystem','Root (/)']);

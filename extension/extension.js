@@ -496,7 +496,8 @@ export default class Codenotch extends Extension {
     }
     _scheduleClock() {
         this._removeTimer(this._clockTimer);this._clockTimer=null;
-        if(!this._widgets.includes('clock')&&!this._widgets.includes('date')&&!this._settings.windowClock)return;
+        // Clock-driven widgets repaint on the minute; the others wait for worker data.
+        if(!this._widgets.some(k=>['clock','date','utc','moon','progress','sun'].includes(k))&&!this._settings.windowClock)return;
         const period=this._settings.clockSeconds?1000:60000;
         const delay=period-(Date.now()%period)+25;
         this._clockTimer=this._timeout(delay,()=>{

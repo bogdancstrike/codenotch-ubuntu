@@ -54,7 +54,7 @@ app.connect('activate',()=>{
                 view.table.sort.emit('clicked');assert(view.table.ascending,'History sort');
                 view.buttons.at(-1).emit('clicked');assert(view.selected===today,'Day selection');
                 view.stack.set_visible_child_name('models');},
-            ()=>{const walk=(w,d)=>{const [a]=w.measure(Gtk.Orientation.VERTICAL,-1);const [b]=w.measure(Gtk.Orientation.VERTICAL,1048576);if(a!==b)print(' '.repeat(d)+w.constructor.name+' '+(w.get_css_classes?.().join('.'))+' '+a+'/'+b+' '+(w.get_label?.()??'').slice(0,40));for(let c=w.get_first_child();c;c=c.get_next_sibling())walk(c,d+1);};walk(view.tabs.models.get_parent().get_parent().get_parent(),0);capture('models');view.drilldown('model','Example Codex model');
+            ()=>{capture('models');view.drilldown('model','Example Codex model');
                 assert(view.stats.models.length===1&&view.model==='Example Codex model','Model drilldown');
                 assert(view.stats.agents[0].id==='codex','Model source aggregation');
                 view.model='';view.drilldown('source','claude');assert(view.stats.agents.length===1,'Agent drilldown');
@@ -71,7 +71,7 @@ app.connect('activate',()=>{
             ()=>{capture('disabled');print('Usage dashboard passed: tabs, filters, drilldowns, pagination, calendar, prices, empty/disabled/partial states.');},
         ];
         let index=0;
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT,350,()=>{
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT,1000,()=>{
             try{steps[index++]();}catch(error){printerr(`step ${index-1}: ${error}`);printerr(error.stack??'');failed=true;index=steps.length;}
             if(index<steps.length)return GLib.SOURCE_CONTINUE;
             view.destroy();removeStyle();window.close();app.quit();return GLib.SOURCE_REMOVE;

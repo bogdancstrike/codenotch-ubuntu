@@ -198,14 +198,14 @@ export class HistoryTable {
         const toolbar=new Gtk.Box({spacing:INNER});this.box.append(toolbar);
         this.sort=button('Newest first');toolbar.append(this.sort);
         this.sort.connect('clicked',()=>{this.ascending=!this.ascending;this.offset=0;this.render();});
-        this.count=label('', ['dim-label'],{hexpand:true,xalign:1});toolbar.append(this.count);
+        this.count=label('', ['dim-label'],{hexpand:true,xalign:1,wrap:false});toolbar.append(this.count);
         const pager=new Gtk.Box({css_classes:['linked']});toolbar.append(pager);
         this.previous=new Gtk.Button({icon_name:'go-previous-symbolic',tooltip_text:'Previous 10 days'});
         this.next=new Gtk.Button({icon_name:'go-next-symbolic',tooltip_text:'Next 10 days'});
         pager.append(this.previous);pager.append(this.next);
         this.previous.connect('clicked',()=>{this.offset=Math.max(0,this.offset-10);this.render();});
         this.next.connect('clicked',()=>{this.offset+=10;this.render();});
-        this.scroller=new Gtk.ScrolledWindow({hscrollbar_policy:Gtk.PolicyType.AUTOMATIC,vscrollbar_policy:Gtk.PolicyType.NEVER,propagate_natural_height:true});
+        this.scroller=new Gtk.ScrolledWindow({hscrollbar_policy:Gtk.PolicyType.AUTOMATIC,vscrollbar_policy:Gtk.PolicyType.NEVER});
         this.box.append(this.scroller);
     }
     setRows(rows) {this.rows=rows.filter(r=>r.recorded);this.offset=0;this.render();}

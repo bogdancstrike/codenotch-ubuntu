@@ -3,7 +3,8 @@ import {geometry,plan,point,band,P,D,W,cardLayout,widgetCard,widgetCardLayout,hi
         clockParts,dateParts,spring,settled,stagger,clamp,tone,CONTRAST} from '../extension/render.js';
 
 const EDGES=['right','left','top','bottom'];
-const WIDGETS=['clock','date','weather','battery','system','cpu','memory','storage','network','uptime','temperature'];
+const WIDGETS=['clock','date','weather','battery','system','cpu','memory','storage','network','uptime','temperature',
+    'load','swap','processes','diskio','wifi','sun','utc','moon','progress'];
 
 // Every cell, divider, and the gear must stay inside the drawn silhouette.
 for(const edge of EDGES)for(const count of [0,1,3,7,12])for(const widgets of [[],['clock'],WIDGETS]){
@@ -63,6 +64,24 @@ for(const kind of WIDGETS){
 }
 assert.equal(widgetCard('weather',{temp:21,unit:'C',text:'Clear'},{},noon).headline,'21°C · Clear');
 assert.equal(widgetCard('weather',{},{},noon).headline,'No reading');
+
+// Clock-derived widgets.
+{
+    const {moonPhase,periodProgress,nextSunEvent,utcParts,widgetValue}=await import('../extension/render.js');
+    assert(moonPhase(new Date(Date.UTC(2000,0,6,18,14))).illumination<.01,'new moon epoch');
+    const full=moonPhase(new Date(Date.UTC(2000,0,21,4,40)));
+    assert(full.illumination>.99&&full.name==='Full moon','full moon two weeks later');
+    const p=periodProgress(new Date(2026,0,1,12));
+    assert(Math.abs(p.day-.5)<1e-9&&p.year<.01&&p.month<.02);
+    assert.deepEqual(nextSunEvent({sunrise:'07:00',sunset:'19:00'},new Date(2026,0,1,6,59)),{name:'Sunrise',time:'07:00'});
+    assert.deepEqual(nextSunEvent({sunrise:'07:00',sunset:'19:00'},new Date(2026,0,1,12)),{name:'Sunset',time:'19:00'});
+    assert.deepEqual(nextSunEvent({sunrise:'07:00',sunset:'19:00'},new Date(2026,0,1,19)),{name:'Sunrise',time:'07:00'});
+    assert.equal(nextSunEvent({},noon),null);
+    assert.match(utcParts(noon).time,/^\d\d:\d\d$/);
+    assert.equal(widgetValue('swap',{total:0}),'Off');
+    assert.equal(widgetValue('load',{one:1.234}),'1.23');
+    assert.equal(widgetValue('wifi',{}),'—');
+}
 
 // Spring motion converges and never runs away.
 let value=0,velocity=0;

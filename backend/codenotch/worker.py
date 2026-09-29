@@ -189,7 +189,11 @@ def demo_snapshot(providers,settings,cache_root):
             demo_widgets[kind]=dict(cpu=.34,mem=.52,memFree=7.7,memTotal=16,disk=.41,diskFree=295,diskTotal=500)
     for kind, sample in (
         ('network',dict(download=153600,upload=25600,received=104857600,sent=10485760,interfaces=['Example network'])),
-        ('uptime',dict(seconds=183600)),('temperature',dict(celsius=54,sensor='Example CPU sensor'))):
+        ('uptime',dict(seconds=183600)),('temperature',dict(celsius=54,sensor='Example CPU sensor')),
+        ('load',dict(one=1.42,five=1.1,fifteen=.86,cores=8)),('swap',dict(fraction=.12,used=.5,total=4)),
+        ('processes',dict(running=3,total=412)),('diskio',dict(read=2097152,write=524288,disks=['Example disk'])),
+        ('wifi',dict(interface='wlan0',quality=.78,signal=-54)),
+        ('sun',dict(sunrise='07:05',sunset='18:52',place=settings['weatherPlace'] or 'Sample city',status='ok',message=''))):
         if kind in settings['widgets']: demo_widgets[kind]=sample
     return dict(version=__version__,settings=settings,providers=out,widgets=demo_widgets,generatedAt=now)
 

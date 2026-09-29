@@ -12,7 +12,12 @@ from pathlib import Path
 from .model import ProviderError, number
 from .providers import request_json
 
-KINDS = ('clock', 'date', 'weather', 'battery', 'system', 'cpu', 'memory', 'storage', 'network', 'uptime', 'temperature')
+KINDS = ('clock', 'date', 'weather', 'battery', 'system', 'cpu', 'memory', 'storage', 'network', 'uptime', 'temperature',
+         'load', 'swap', 'processes', 'diskio', 'wifi', 'sun', 'utc', 'moon', 'progress')
+# Drawn from the local clock by the extension; the worker has nothing to read.
+LOCAL_KINDS = frozenset(('clock', 'date', 'utc', 'moon', 'progress'))
+# Sunrise and sunset come from the same cached Open-Meteo request as weather.
+WEATHER_KINDS = frozenset(('weather', 'sun'))
 WEATHER_INTERVAL = 900
 GEOCODER = 'https://geocoding-api.open-meteo.com/v1/search'
 FORECAST = 'https://api.open-meteo.com/v1/forecast'
@@ -65,7 +70,7 @@ def fetch_weather(settings):
     imperial = settings.get('weatherUnits') == 'imperial'
     url = (f'{FORECAST}?latitude={lat:.4f}&longitude={lon:.4f}'
            '&current=temperature_2m,apparent_temperature,weather_code,is_day,relative_humidity_2m,wind_speed_10m'
-           '&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=auto'
+           '&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset&forecast_days=1&timezone=auto'
            + ('&temperature_unit=fahrenheit&wind_speed_unit=mph' if imperial else ''))
     data = request_json(url, {})
     current = data.get('current') or {}
@@ -81,6 +86,7 @@ def fetch_weather(settings):
         temp=round(temp), feels=_round(current.get('apparent_temperature')),
         humidity=_round(current.get('relative_humidity_2m')), wind=_round(current.get('wind_speed_10m')),
         high=_round(_first(daily.get('temperature_2m_max'))), low=_round(_first(daily.get('temperature_2m_min'))),
+        sunrise=_clock(_first(daily.get('sunrise'))), sunset=_clock(_first(daily.get('sunset'))),
         code=code, text=label, symbol=symbol,
         unit='F' if imperial else 'C', windUnit='mph' if imperial else 'km/h',
         place=str(settings.get('weatherPlace') or ''), updatedAt=time.time(),
@@ -91,6 +97,12 @@ def _first(value):
     return value[0] if isinstance(value, list) and value else None
 
 
+def _clock(value):
+    """'2026-09-29T07:05' in the location's own time zone -> '07:05'."""
+    text = str(value or '')
+    return text[11:16] if len(text) >= 16 and text[13] == ':' else None
+
+
 def _round(value):
     n = number(value)
     return None if n is None else round(n)
@@ -99,7 +111,7 @@ def _round(value):
 def needs_network(settings, cache, force=False):
     """True when a widget refresh would make a request. Lets the worker skip its
     thread pool entirely on the common no-op run."""
-    if 'weather' not in (settings.get('widgets') or []):
+    if not WEATHER_KINDS & set(settings.get('widgets') or []):
         return False
     old = cache.get('weather') if isinstance(cache.get('weather'), dict) else {}
     if force or old.get('key') != _weather_key(settings):
@@ -205,11 +217,15 @@ def collect(settings, cache, force=False):
     """Build the widget payload for the requested widget list."""
     wanted = [k for k in settings.get('widgets') or [] if k in KINDS]
     out = {}
-    if 'weather' in wanted:
-        out['weather'] = weather(settings, cache, force)
+    if WEATHER_KINDS & set(wanted):
+        reading = weather(settings, cache, force)
         # weather() and needs_network() both read cache['weather']; keep the
         # reading there so the 15-minute window is actually honoured.
-        cache['weather'] = out['weather']
+        cache['weather'] = reading
+        if 'weather' in wanted:
+            out['weather'] = reading
+        if 'sun' in wanted:
+            out['sun'] = {key: reading.get(key) for key in ('sunrise', 'sunset', 'place', 'status', 'message')}
     if 'battery' in wanted:
         found = battery()
         if found:
@@ -220,7 +236,9 @@ def collect(settings, cache, force=False):
         if found:
             for kind in system_widgets:
                 out[kind] = found
-    for kind, read in (('network', lambda: network(cache)), ('uptime', uptime), ('temperature', temperature)):
+    for kind, read in (('network', lambda: network(cache)), ('uptime', uptime), ('temperature', temperature),
+                       ('load', load), ('swap', swap), ('processes', processes),
+                       ('diskio', lambda: diskio(cache)), ('wifi', wifi)):
         if kind in wanted:
             found = read()
             if found is not None:
@@ -276,3 +294,89 @@ def temperature(root=Path('/sys/class/hwmon')):
     except OSError:
         return None
     return max(readings, key=lambda item: item['celsius']) if readings else None
+
+
+def load(proc=Path('/proc')):
+    """Run-queue averages; `cores` lets the reader judge 2.0 on 2 vs 16 CPUs."""
+    try:
+        fields = (proc/'loadavg').read_text().split()
+        values = [float(x) for x in fields[:3]]
+    except (OSError, ValueError, IndexError):
+        return None
+    return dict(one=values[0], five=values[1], fifteen=values[2], cores=os.cpu_count() or 1)
+
+
+def swap(proc=Path('/proc')):
+    values = {}
+    try:
+        for line in (proc/'meminfo').read_text().splitlines():
+            key, _, rest = line.partition(':')
+            if key in ('SwapTotal', 'SwapFree'):
+                values[key] = float(rest.split()[0])
+    except (OSError, ValueError, IndexError):
+        return None
+    if 'SwapTotal' not in values:
+        return None
+    total, free = values['SwapTotal'], values.get('SwapFree', values['SwapTotal'])
+    return dict(fraction=(1 - free / total) if total > 0 else None,
+                used=round((total - free) / 1048576, 1), total=round(total / 1048576, 1))
+
+
+def processes(proc=Path('/proc')):
+    """Scheduling entities from loadavg: running now / existing."""
+    try:
+        running, _, total = (proc/'loadavg').read_text().split()[3].partition('/')
+        return dict(running=int(running), total=int(total))
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def diskio(cache, proc=Path('/proc'), now=None):
+    """Whole-disk read/write rates; partitions and virtual devices are skipped
+    so the same bytes are not counted twice."""
+    now = time.monotonic() if now is None else now
+    disks = {}
+    try:
+        for line in (proc/'diskstats').read_text().splitlines():
+            fields = line.split()
+            if len(fields) < 10: continue
+            name = fields[2]
+            if name.startswith(('loop', 'ram', 'zram', 'dm-', 'md', 'sr', 'fd')): continue
+            if not _is_partition(name):
+                disks[name] = (int(fields[5]) * 512, int(fields[9]) * 512)
+    except (OSError, ValueError, IndexError):
+        return None
+    old = cache.get('diskio') or {}
+    cache['diskio'] = {'at': now, 'disks': disks}
+    out = dict(disks=sorted(disks))
+    elapsed = now - old.get('at', now)
+    prior = old.get('disks', {})
+    if elapsed <= 0 or set(prior) != set(disks): return out
+    if any(a < b for name, values in disks.items() for a, b in zip(values, prior[name])): return out
+    out['read'] = sum(v[0]-prior[name][0] for name, v in disks.items())/elapsed
+    out['write'] = sum(v[1]-prior[name][1] for name, v in disks.items())/elapsed
+    return out
+
+
+def _is_partition(name):
+    """sda1, nvme0n1p2, mmcblk0p1 are partitions; sda, nvme0n1 are disks."""
+    if name.startswith(('nvme', 'mmcblk')):
+        return 'p' in name.split('n', 1)[-1][1:] if name.startswith('nvme') else 'p' in name[6:]
+    return name[-1:].isdigit()
+
+
+def wifi(proc=Path('/proc')):
+    """Strongest wireless interface; link quality is normalised to 0..1 (of 70)."""
+    best = None
+    try:
+        for line in (proc/'net/wireless').read_text().splitlines()[2:]:
+            name, _, values = line.partition(':')
+            fields = values.split()
+            quality, level = float(fields[1].rstrip('.')), float(fields[2].rstrip('.'))
+            reading = dict(interface=name.strip(), quality=max(0.0, min(1.0, quality / 70)),
+                           signal=round(level) if level < 0 else None)
+            if best is None or reading['quality'] > best['quality']:
+                best = reading
+    except (OSError, ValueError, IndexError):
+        return None
+    return best
