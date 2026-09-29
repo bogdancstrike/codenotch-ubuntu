@@ -164,6 +164,17 @@ export function chart(box,entries,{unit='tokens',onSelect=null,mode='bars',serie
     }
     box.append(axis);box.append(detail);return area;
 }
+// Quota meter: series blue until 70%, then amber, then red at 90%.
+export function meter(fraction,width=120) {
+    const value=Math.max(0,Math.min(1,fraction??0));
+    const bar=new Gtk.DrawingArea({content_width:width,content_height:6,valign:Gtk.Align.CENTER});
+    bar.set_draw_func((_area,cr,w,h)=>{
+        cr.setSourceRGBA(.5,.5,.5,.22);roundRect(cr,0,0,w,h,h/2);cr.fill();
+        if(value>=.9)cr.setSourceRGBA(.878,.106,.141,1);else if(value>=.7)cr.setSourceRGBA(.898,.647,.039,1);else seriesColor(cr,0);
+        if(value>0){roundRect(cr,0,0,Math.max(h,value*w),h,h/2);cr.fill();}
+    });
+    return bar;
+}
 // Ranked horizontal bars; rows are buttons so drilldowns work by keyboard.
 export function rankChart(parent,title,subtitle,items,total,onSelect=null,limit=5) {
     const box=card(parent,title,subtitle);

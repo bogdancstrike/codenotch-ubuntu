@@ -27,8 +27,14 @@ export function stylePreferences(window) {
         .codenotch-settings row .title { font-weight: 500; }
         .codenotch-settings stackswitcher button { padding: 8px 18px; }
         .codenotch-settings .usage-navigation { margin: 0; }
+        .codenotch-settings .segmented button { padding: 4px 14px; min-width: 0; }
+        .codenotch-settings .segmented button:checked { background: @accent_bg_color; color: @accent_fg_color; }
+        .codenotch-settings .navigation-sidebar row { border-radius: 8px; }
+        .codenotch-settings .usage-navigation { background: alpha(@window_fg_color, .06); border-radius: 10px; padding: 3px; }
+        .codenotch-settings .usage-navigation button { background: none; border-radius: 8px; box-shadow: none; }
+        .codenotch-settings .usage-navigation button:hover { background: alpha(@window_fg_color, .06); }
         .codenotch-settings .usage-navigation button:checked {
-            background: alpha(@accent_color, .15); color: @accent_color;
+            background: @card_bg_color; color: @window_fg_color; box-shadow: 0 1px 3px alpha(black, .12);
         }
     `,-1);
     Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(),css,Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);

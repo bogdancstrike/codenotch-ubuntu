@@ -105,7 +105,14 @@ AI rings and before the gear, separated by a divider.
 | **Date** | Weekday and day, in three styles | None |
 | **Weather** | Condition symbol and temperature; hover for feels-like, high/low, humidity, wind | One request per 15 minutes |
 | **Battery** | Charge and charging state; hides itself on desktops | A `/sys` read |
-| **System load** | CPU, RAM and SSD meters; hover for free-of-total | Two `/proc` reads and a `statvfs` |
+| **System overview** | CPU, RAM and SSD meters; hover for free-of-total | Two `/proc` reads and a `statvfs` |
+| **UTC clock** · **Day progress** · **Moon phase** | UTC time; share of today (card adds week, month, year); moon illumination and next full moon | None — calculated locally |
+| **Sunrise and sunset** | The next sunrise or sunset at your weather location; card adds daylight length | Shares the weather request |
+| **CPU** · **Memory** · **Swap** · **Storage** | One reading each, with free-of-total on hover | `/proc` and `statvfs` reads |
+| **Disk activity** · **Network traffic** | Read/write and download/upload rates across whole disks and non-loopback interfaces | Two samples of `/proc` counters |
+| **Wi-Fi signal** | Link quality and dBm of the strongest wireless interface | A `/proc/net/wireless` read |
+| **Load average** · **Processes** | 1/5/15-minute load against your CPU threads; existing and running tasks | A `/proc/loadavg` read |
+| **Uptime** · **CPU temperature** | Time since boot; the highest supported CPU sensor | `/proc` and `/sys` reads |
 
 Weather uses [Open-Meteo](https://open-meteo.com/): no account, no API key, and no
 identifiers are sent — just the coordinates of the place you pick. Search for a city in
@@ -119,17 +126,24 @@ city the notch cannot use.
 
 ## Settings
 
-Five pages, all native libadwaita.
+Native libadwaita with a sidebar in three sections — **Panel**, **Accounts** and
+**Application** — and a search field that also finds rows inside pages. Choices with
+a few options are segmented controls; every page shares one content width and spacing.
 
-**Connections** — a row per AI with its usage source, connection status, allowance windows,
-last successful reading, and a **Verify** button that actually performs the request.
-Usage refresh (60 s to 10 min, default 2½ min), idle refresh, demo mode, and *Verify all*.
+**General** — every AI account with its switch, plus usage refresh (60 s to 10 min,
+default 2½ min), idle refresh, demo mode, *Verify all*, diagnostics and notifications.
 Bulk verification is available here in settings; the notch and top-bar menus do not
 offer a bulk verification shortcut.
 
-**Widgets** — eleven optional widgets, grouped into daily essentials and system monitors,
-with an enabled count and contextual configuration. Clock format and seconds, date style, weather location
-search, and units.
+**Accounts** — one page per AI: show-in-notch switch, label, status, last successful
+reading with a **Verify** button that actually performs the request, current usage
+windows with reset times, the window its ring shows, local usage history for Claude
+Code, Codex and OpenCode (today, 30 days, busiest day, all history, a 30-day chart and
+top model), and diagnostics.
+
+**Widgets** — twenty optional widgets grouped into time and date, weather and sky,
+system, and network, each followed by its options: clock format and seconds, date
+style, weather location search, and units.
 
 **Appearance** — visibility (on hover / always / hidden), the resting sliver, screen edge
 (right, left, top, bottom), monitor, size (75%–200%), top-panel icon, hiding over fullscreen
@@ -321,8 +335,9 @@ official upstream release.
 ## Usage analytics
 
 **Settings → Usage** provides Overview, History, Models, Agents, and Data tabs.
-Filter by period, client, and model; inspect daily/hourly charts, token composition,
-cache share, streaks, and estimated API costs. The History tab includes a paginated
+Filter by period, client, and model; inspect daily activity or cost, the daily token mix,
+cumulative tokens, weekday and hourly patterns, top models and agents, cache share,
+streaks, and estimated API costs. The History tab includes a paginated
 daily table and monthly totals. Overview restores the annual activity calendar with
 clickable days and keeps secondary statistics in an expandable section. Select an agent or model for
 a focused view. Enable local records and configure model prices in Data.
@@ -332,9 +347,9 @@ See [Usage history](docs/usage-history.md) for coverage and metric definitions.
 
 Codex's ring shows its main 5-hour quota by default; other accounts show their
 most-used quota window. Hover cards still show all windows. Pin a specific window under
-Settings → Connections → account → Ring shows. Missing pins fall back to automatic.
+Settings → Accounts → account → Ring shows. Missing pins fall back to automatic.
 
-Notifications are opt-in under Connections. Choose a 75/80/90/95% warning,
+Notifications are opt-in under General. Choose a 75/80/90/95% warning,
 reset alerts for previously warned windows, and repeated connection failures.
 Delivery state survives restarts; stale readings never trigger quota alerts.
 

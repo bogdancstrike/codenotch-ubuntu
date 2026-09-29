@@ -33,8 +33,43 @@ class ExtraWidgets(unittest.TestCase):
         (self.root/'cpu/temp2_input').write_text('62000');(self.root/'cpu/temp2_label').write_text('Package id 0')
         self.assertEqual(widgets.temperature(self.root),{'celsius':62,'sensor':'Package id 0'})
         (self.root/'cpu/temp2_input').write_text('999999');self.assertEqual(widgets.temperature(self.root)['celsius'],52)
+    def test_load_swap_processes(self):
+        self.assertIsNone(widgets.load(self.root));self.assertIsNone(widgets.processes(self.root));self.assertIsNone(widgets.swap(self.root))
+        (self.root/'loadavg').write_text('1.50 0.75 0.25 3/412 9999\n')
+        self.assertEqual(widgets.load(self.root)['five'],.75)
+        self.assertEqual(widgets.processes(self.root),{'running':3,'total':412})
+        (self.root/'meminfo').write_text('MemTotal: 100 kB\nSwapTotal: 2097152 kB\nSwapFree: 1048576 kB\n')
+        self.assertEqual(widgets.swap(self.root),{'fraction':.5,'used':1.0,'total':2.0})
+        (self.root/'meminfo').write_text('SwapTotal: 0 kB\nSwapFree: 0 kB\n')
+        self.assertIsNone(widgets.swap(self.root)['fraction'])
+    def test_disk_activity_counts_whole_disks_once(self):
+        cache={}
+        def stats(read,write):
+            rows=[f'8 0 sda 1 0 {read} 0 1 0 {write} 0 0 0 0',f'8 1 sda1 1 0 {read} 0 1 0 {write} 0 0 0 0',
+                  f'259 0 nvme0n1 1 0 {read} 0 1 0 {write} 0 0 0 0',f'259 1 nvme0n1p1 1 0 {read} 0 1 0 {write} 0 0 0 0',
+                  '7 0 loop0 1 0 99999 0 1 0 99999 0 0 0 0']
+            (self.root/'diskstats').write_text('\n'.join(rows))
+        stats(0,0);self.assertEqual(widgets.diskio(cache,self.root,1),{'disks':['nvme0n1','sda']})
+        stats(10,20);reading=widgets.diskio(cache,self.root,3)
+        self.assertEqual((reading['read'],reading['write']),(10*512*2/2,20*512*2/2))
+        stats(1,1);self.assertNotIn('read',widgets.diskio(cache,self.root,4))
+    def test_wifi_picks_strongest_interface(self):
+        self.assertIsNone(widgets.wifi(self.root));(self.root/'net').mkdir()
+        (self.root/'net/wireless').write_text('h\nh\n wlan0: 0000   35.  -75.  -256 0 0 0 0 0 0\n wlan1: 0000   70.  -40.  -256 0 0 0 0 0 0\n')
+        self.assertEqual(widgets.wifi(self.root),{'interface':'wlan1','quality':1.0,'signal':-40})
+    def test_sun_shares_the_weather_request(self):
+        reading={'temp':20,'sunrise':'07:01','sunset':'18:59','place':'Town','status':'ok','message':''}
+        with patch.object(widgets,'weather',return_value=reading) as weather:
+            out=widgets.collect({'widgets':['sun']},{})
+            self.assertEqual(out,{'sun':{'sunrise':'07:01','sunset':'18:59','place':'Town','status':'ok','message':''}})
+            out=widgets.collect({'widgets':['weather','sun']},{});self.assertEqual(weather.call_count,2);self.assertIn('weather',out)
+        self.assertTrue(widgets.needs_network({'widgets':['sun']},{}))
+        self.assertFalse(widgets.needs_network({'widgets':['utc','moon','progress']},{}))
+        self.assertEqual(widgets._clock('2026-09-29T07:05'),'07:05');self.assertIsNone(widgets._clock(None))
+    def test_clock_widgets_need_no_worker_reading(self):
+        self.assertEqual(widgets.collect({'widgets':['utc','moon','progress']},{}),{})
     def test_six_widgets_survive_settings_validation(self):
-        kinds=['cpu','memory','storage','network','uptime','temperature']
+        kinds=['cpu','memory','storage','network','uptime','temperature','load','swap','processes','diskio','wifi','sun','utc','moon','progress']
         self.assertEqual(clamp_widgets(kinds+['cpu','invalid']),kinds)
     def test_shared_system_sample_and_disabled_readers(self):
         with patch.object(widgets,'system',return_value={'cpu':.5}) as system, \

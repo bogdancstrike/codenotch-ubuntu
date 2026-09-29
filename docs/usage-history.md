@@ -111,9 +111,15 @@ Settings follow the system light/dark preference by default. Override it under
 
 
 Overview uses one shared content width for navigation, summaries, chart cards and the
-calendar. The chart order is daily activity/cost, cumulative recorded tokens, tokens
-by weekday, and hourly activity, followed by the contribution grid. The cumulative
-line sums only recorded tokens; missing records are not interpreted as measured
-zero usage. Weekday totals follow local calendar dates and all active filters.
-Settings pages share the same maximum width, with 24px section gaps and 12px control
-gaps. Smaller screens can still scroll the calendar and tables horizontally.
+calendar. It opens with four summary tiles (tokens, estimated cost, active days, tokens
+per active day), then daily activity or cost, the daily token mix (fresh input, output,
+cache read, cache write), cumulative recorded tokens, tokens by weekday beside tokens by
+hour, and top models beside agents. The contribution grid follows all charts. The
+cumulative line sums only recorded tokens; missing records are not interpreted as
+measured zero usage. Weekday totals follow local calendar dates and all active filters.
+Cards are separated by 24px and their contents by 12px on every settings page. Smaller
+screens can still scroll the calendar and tables horizontally.
+
+Each Claude Code, Codex and OpenCode account page repeats a compact summary of the same
+records: today, the last 30 days, the busiest day, all history, and the top model.
+Records are grouped by tool, so several profiles of one tool share these figures.

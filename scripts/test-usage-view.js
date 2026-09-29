@@ -8,6 +8,7 @@ import {dateKey,shiftDate} from '../extension/history-model.js';
 const app=new Adw.Application({application_id:'local.codenotch.UsageSmoke'});
 let failed=false;
 const assert=(condition,message)=>{if(!condition)throw Error(message);};
+class Retry extends Error {}
 app.connect('activate',()=>{
     let view,window;
     try{
@@ -32,7 +33,8 @@ app.connect('activate',()=>{
         window.present();
         const capture=name=>{
             const snapshot=new Gtk.Snapshot();window.snapshot_child(window.get_child(),snapshot);
-            const node=snapshot.to_node();assert(node,'Usage preview did not render');
+            // No node means the rebuilt page has not been laid out yet; the runner retries.
+            const node=snapshot.to_node();if(!node)throw new Retry();
             assert(window.get_renderer().render_texture(node,null).save_to_png(`/tmp/codenotch-usage-${name}.png`),'Could not save screenshot');
         };
         const steps=[
@@ -70,9 +72,11 @@ app.connect('activate',()=>{
                 view.render({enabled:false,days:[],breakdown:[]});assert(view.buttons.length===0,'Disabled history cleared');},
             ()=>{capture('disabled');print('Usage dashboard passed: tabs, filters, drilldowns, pagination, calendar, prices, empty/disabled/partial states.');},
         ];
-        let index=0;
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT,1000,()=>{
-            try{steps[index++]();}catch(error){printerr(`step ${index-1}: ${error}`);printerr(error.stack??'');failed=true;index=steps.length;}
+        let index=0,retries=0;
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT,500,()=>{
+            try{steps[index]();index++;retries=0;}
+            catch(error){
+                if(error instanceof Retry&&++retries<20)return GLib.SOURCE_CONTINUE;index++;printerr(`step ${index-1}: ${error}`);printerr(error.stack??'');failed=true;index=steps.length;}
             if(index<steps.length)return GLib.SOURCE_CONTINUE;
             view.destroy();removeStyle();window.close();app.quit();return GLib.SOURCE_REMOVE;
         });

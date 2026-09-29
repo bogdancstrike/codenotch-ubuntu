@@ -4,7 +4,8 @@ import Gdk from 'gi://Gdk';
 import GLib from 'gi://GLib';
 import {calendarDays,compactCount,usageStats,costText,formatUSD,sourceName,COUNTERS,chartSeries} from './history-model.js';
 import {sizePreferencesPage} from './preferences-style.js';
-import {GAP,INNER,clear,label,button,section,columns,card,metrics,breakdown,barChart,chart,rankChart,HistoryTable} from './history-widgets.js';
+import {pageHeading} from './settings-shell.js';
+import {GAP,INNER,clear,label,button,section,columns,card,metrics,breakdown,barChart,chart,rankChart,meter,HistoryTable} from './history-widgets.js';
 
 const PERIODS=[7,30,90,365];
 const KINDS=[['input','Fresh input'],['output','Output'],['cacheRead','Cache read'],['cacheWrite','Cache write']];
@@ -15,7 +16,8 @@ export class UsagePage {
         this.rows=[];this.buttons=[];this.providers=[];this.priceRows=[];
         this.page=new Adw.PreferencesPage({name:'usage',title:'Usage',icon_name:'view-grid-symbolic'});
         sizePreferencesPage(this.page);
-        const heading=new Adw.PreferencesGroup({title:'Usage analytics',description:'Your local token activity, models and estimated API costs.'});this.page.add(heading);
+        pageHeading(this.page,'Usage','Your local token activity, models and estimated API costs.');
+        const heading=new Adw.PreferencesGroup({title:'Span and filters'});this.page.add(heading);
         const filters=new Gtk.Box({spacing:INNER,homogeneous:true});heading.add(filters);
         this.period=this._filter(filters,'Period',PERIODS.map(n=>`Last ${n} days`),1,index=>{this.span=PERIODS[index];this.draw();});
         this.agentFilter=this._filter(filters,'Agent',['All agents'],0,index=>{this.source=this.agentIDs[index]??'';this.draw();});
@@ -115,7 +117,8 @@ export class UsagePage {
             if(requestedSettings!==settingsKey()){this.loaded=false;this.load();return;}
             if(!result){this.status.set_label('Could not read history. Refresh to retry.');return;}
             this.render(result);this.loaded=!result.more;
-            if(result.more&&this.owner._window.get_visible_page()===this.page){
+            const visible=this.owner._historyVisible?this.owner._historyVisible():this.owner._window.get_visible_page()===this.page;
+            if(result.more&&visible){
                 this.timer=GLib.timeout_add(GLib.PRIORITY_DEFAULT,100,()=>{this.timer=null;this.load();return GLib.SOURCE_REMOVE;});
             }
         });
@@ -134,7 +137,7 @@ export class UsagePage {
         this.modelFilter.set_tooltip_text(this.model||'All models');this.syncingFilters=false;
     }
     render(report) {
-        this.report=report;this._syncFilters();this.draw();this._renderPrices();
+        this.report=report;this._syncFilters();this.draw();this._renderPrices();this.owner._historyChanged?.();
     }
     drilldown(kind,id) {this[kind]=id;this._syncFilters();this.draw();this.stack.set_visible_child_name('overview');}
     draw() {
@@ -288,7 +291,7 @@ export class UsagePage {
             for(const w of p.windows??[]){
                 const row=new Adw.ActionRow({title:w.label,use_markup:false,
                     subtitle:`${Math.floor(w.fraction*100)}% used${w.resetsAt?' · resets '+new Date(w.resetsAt*1000).toLocaleString():''}`});
-                row.add_suffix(new Gtk.ProgressBar({fraction:Math.max(0,Math.min(1,w.fraction)),width_request:100,valign:Gtk.Align.CENTER}));account.add_row(row);
+                row.add_suffix(meter(w.fraction));account.add_row(row);
             }
         }
     }

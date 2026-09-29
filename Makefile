@@ -1,9 +1,14 @@
-.PHONY: test deb check preview clean
+.PHONY: test gtk-test deb check preview clean
 
 test:
 	PYTHONPATH=backend python3 -m unittest discover -s tests -v
 	node tests/test-layout.mjs
 	node tests/test-history-model.mjs
+
+# Needs a display: drives the real GTK widgets.
+gtk-test:
+	gjs -m scripts/test-usage-view.js
+	gjs -m scripts/test-settings-shell.js
 
 check:
 	python3 -m compileall -q backend
@@ -15,6 +20,7 @@ check:
 	node --check extension/history-model.js
 	node --check extension/history-widgets.js
 	node --check extension/preferences-style.js
+	node --check extension/settings-shell.js
 
 # Redraws docs/preview*.png through the extension's own renderer. The gjs pass
 # uses the real Pango text engine, so it doubles as a load-and-draw smoke test.
