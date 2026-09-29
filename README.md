@@ -119,7 +119,7 @@ city the notch cannot use.
 
 ## Settings
 
-Four pages, all native libadwaita.
+Five pages, all native libadwaita.
 
 **Connections** — a row per AI with its usage source, connection status, allowance windows,
 last successful reading, and a **Verify** button that actually performs the request.
@@ -127,12 +127,16 @@ Usage refresh (60 s to 10 min, default 2½ min), idle refresh, demo mode, and *V
 Bulk verification is available here in settings; the notch and top-bar menus do not
 offer a bulk verification shortcut.
 
-**Widgets** — the five widgets above, clock format and seconds, date style, weather location
+**Widgets** — eleven optional widgets, grouped into daily essentials and system monitors,
+with an enabled count and contextual configuration. Clock format and seconds, date style, weather location
 search, and units.
 
 **Appearance** — visibility (on hover / always / hidden), the resting sliver, screen edge
 (right, left, top, bottom), monitor, size (75%–200%), top-panel icon, hiding over fullscreen
-windows, and **text contrast** in three tiers.
+windows, **text contrast** in three tiers, and System/Light/Dark settings themes.
+
+**Usage** — activity calendar, charts, model and agent breakdowns, daily history,
+and configurable API cost estimates. Enable local records in its Data tab.
 
 **About** — what this build is, the repository, and what this install is currently doing:
 how many AIs are enabled, which widgets are on, your refresh cadence, and where your
@@ -314,9 +318,20 @@ MIT. Original artwork, geometry, and source-derived behavior © 2026 Vinz; the o
 [`LICENSE`](LICENSE) is retained. The Ubuntu port is by Bogdan D and is not an
 official upstream release.
 
+## Usage analytics
+
+**Settings → Usage** provides Overview, History, Models, Agents, and Data tabs.
+Filter by period, client, and model; inspect daily/hourly charts, token composition,
+cache share, streaks, and estimated API costs. The History tab includes a paginated
+daily table and monthly totals. Overview restores the annual activity calendar with
+clickable days and keeps secondary statistics in an expandable section. Select an agent or model for
+a focused view. Enable local records and configure model prices in Data.
+See [Usage history](docs/usage-history.md) for coverage and metric definitions.
+
 ## Quota selection
 
-Each account's ring shows its most-used quota window. Pin a specific window under
+Codex's ring shows its main 5-hour quota by default; other accounts show their
+most-used quota window. Hover cards still show all windows. Pin a specific window under
 Settings → Connections → account → Ring shows. Missing pins fall back to automatic.
 
 Notifications are opt-in under Connections. Choose a 75/80/90/95% warning,
@@ -396,3 +411,25 @@ use a revolving dot, while waiting sessions use a stationary amber dot. A fresh 
 at 90% or above lights the resting sliver red without adding an idle animation.
 Hover cards retain every reported window (including Codex model/review pools); scroll
 or focus the card and use Up/Down when its contents exceed the available height.
+
+### Additional desktop widgets
+
+Widgets now includes six additional switches, all off by default:
+
+| Widget | Notch | Hover details |
+| --- | --- | --- |
+| CPU | Utilization | Sampling information |
+| Memory | RAM utilization | Available and total memory |
+| Storage | Root filesystem utilization | Free space and capacity |
+| Network traffic | Download rate | Upload rate, counters and interfaces |
+| Uptime | Time since boot | Days, hours and minutes |
+| CPU temperature | Temperature in Celsius | Highest supported CPU sensor |
+
+Network rates sum non-loopback interfaces, including virtual interfaces; they are
+sampled between worker readings. CPU and network need two samples before rates are
+available. Missing CPU sensors display unavailable. These widgets make no network
+requests. The existing System overview remains available for a combined display.
+
+Settings follow the desktop light/dark mode. **Appearance → Settings appearance**
+lets you select System, Light or Dark. Notification controls have their own section;
+clock and weather options appear when their corresponding widgets are enabled.

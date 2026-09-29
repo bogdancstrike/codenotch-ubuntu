@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 from pathlib import Path
 import sqlite3
@@ -59,3 +59,46 @@ class History(unittest.TestCase):
         self.assertEqual(summary(self.db,{})['tokens'],165)
         scan_opencode(self.db,path,time.monotonic()+2)
         self.assertEqual(summary(self.db,{})['tokens'],165)
+
+    def test_dashboard_buckets_reconcile_sources_models_hours_and_prices(self):
+        today=datetime.now().replace(hour=10,minute=0,second=0,microsecond=0)
+        samples=[('claude','priced',today,100,20,50,10),
+                 ('codex','priced',today.replace(hour=14),200,40,60,0),
+                 ('claude','unknown',today-timedelta(days=1),30,5,0,0),
+                 ('codex','free',today,0,0,0,0)]
+        for i,(source,model,at,*counts) in enumerate(samples):
+            self.db.execute('INSERT INTO events VALUES (?,?,?,?,?,?,?,?,?)',
+                            (str(i),source,model,'private/project',at.timestamp(),*counts))
+        rates={'priced':dict(input=1,output=4,cacheRead=.1,cacheWrite=2),
+               'free':dict(input=0,output=0,cacheRead=0,cacheWrite=0)}
+        result=summary(self.db,rates,now=today.timestamp())
+        buckets=result['breakdown']
+        self.assertEqual(sum(b['tokens'] for b in buckets),result['tokens'])
+        self.assertEqual(sum(b['records'] for b in buckets),4)
+        self.assertEqual(sum(sum(b['hours']) for b in buckets),result['tokens'])
+        self.assertAlmostEqual(sum(b['estimatedCost'] for b in buckets),result['estimatedCost'])
+        self.assertEqual(sum(b['unpricedTokens'] for b in buckets),35)
+        self.assertEqual(next(b for b in buckets if b['model']=='free')['pricedRecords'],1)
+        self.assertEqual(next(b for b in buckets if b['model']=='unknown')['pricedRecords'],0)
+        self.assertNotIn('private/project',json.dumps(buckets))
+        filtered=summary(self.db,rates,now=today.timestamp(),excluded=('claude',))
+        self.assertEqual({b['source'] for b in filtered['breakdown']},{'codex'})
+        self.assertEqual(sum(b['tokens'] for b in filtered['breakdown']),300)
+
+    def test_dashboard_range_uses_local_calendar_boundaries(self):
+        today=datetime.now().replace(hour=12,minute=0,second=0,microsecond=0)
+        for i,age in enumerate((0,6,7,-1)):
+            self.db.execute('INSERT INTO events VALUES (?,?,?,?,?,?,?,?,?)',
+                            (str(i),'claude','test','', (today-timedelta(days=age)).timestamp(),10,0,0,0))
+        result=summary(self.db,{},days=7,now=today.timestamp())
+        self.assertEqual(result['tokens'],20)
+        self.assertEqual(len(result['breakdown']),2)
+        self.assertTrue(all(b['hours'][12]==10 for b in result['breakdown']))
+
+    def test_explicit_zero_prices_and_zero_tokens_are_not_unpriced(self):
+        self.db.execute('INSERT INTO events VALUES (?,?,?,?,?,?,?,?,?)',
+                        ('zero','claude','free','',self.now,0,0,0,0))
+        result=summary(self.db,{'free':dict(input=0,output=0,cacheRead=0,cacheWrite=0)})
+        self.assertEqual(result['estimatedCost'],0)
+        self.assertEqual(result['pricedRecords'],1)
+        self.assertEqual(result['breakdown'][0]['pricedRecords'],1)

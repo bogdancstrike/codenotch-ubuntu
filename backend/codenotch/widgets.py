@@ -12,7 +12,7 @@ from pathlib import Path
 from .model import ProviderError, number
 from .providers import request_json
 
-KINDS = ('clock', 'date', 'weather', 'battery', 'system')
+KINDS = ('clock', 'date', 'weather', 'battery', 'system', 'cpu', 'memory', 'storage', 'network', 'uptime', 'temperature')
 WEATHER_INTERVAL = 900
 GEOCODER = 'https://geocoding-api.open-meteo.com/v1/search'
 FORECAST = 'https://api.open-meteo.com/v1/forecast'
@@ -214,8 +214,65 @@ def collect(settings, cache, force=False):
         found = battery()
         if found:
             out['battery'] = found
-    if 'system' in wanted:
+    system_widgets = set(wanted) & {'system', 'cpu', 'memory', 'storage'}
+    if system_widgets:
         found = system(cache)
         if found:
-            out['system'] = found
+            for kind in system_widgets:
+                out[kind] = found
+    for kind, read in (('network', lambda: network(cache)), ('uptime', uptime), ('temperature', temperature)):
+        if kind in wanted:
+            found = read()
+            if found is not None:
+                out[kind] = found
     return out
+
+
+def network(cache, proc=Path('/proc'), now=None):
+    """Rates over the last sample; interface changes/reset counters start fresh."""
+    now = time.monotonic() if now is None else now
+    interfaces = {}
+    try:
+        for line in (proc/'net/dev').read_text().splitlines()[2:]:
+            name, _, values = line.partition(':')
+            name = name.strip()
+            if not name or name == 'lo': continue
+            fields = values.split()
+            interfaces[name] = (int(fields[0]), int(fields[8]))
+    except (OSError, ValueError, IndexError):
+        return None
+    old = cache.get('network') or {}
+    cache['network'] = {'at': now, 'interfaces': interfaces}
+    out = dict(interfaces=sorted(interfaces), received=sum(v[0] for v in interfaces.values()),
+               sent=sum(v[1] for v in interfaces.values()))
+    elapsed = now - old.get('at', now)
+    if elapsed <= 0 or set(old.get('interfaces', {})) != set(interfaces): return out
+    prior = old['interfaces']
+    if any(a < b for name, values in interfaces.items() for a, b in zip(values, prior[name])): return out
+    out['download'] = sum(v[0]-prior[name][0] for name, v in interfaces.items())/elapsed
+    out['upload'] = sum(v[1]-prior[name][1] for name, v in interfaces.items())/elapsed
+    return out
+
+
+def uptime(proc=Path('/proc')):
+    try:
+        seconds = _number((proc/'uptime').read_text().split()[0])
+        return dict(seconds=int(seconds)) if seconds is not None and seconds >= 0 else None
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def temperature(root=Path('/sys/class/hwmon')):
+    """Only known CPU sensor drivers; do not substitute disk/GPU temperatures."""
+    readings = []
+    try:
+        for device in sorted(root.iterdir()):
+            driver = _read(device/'name')
+            if driver not in ('coretemp', 'k10temp', 'zenpower', 'cpu_thermal'): continue
+            for sensor in sorted(device.glob('temp*_input')):
+                value = _number(_read(sensor))
+                if value is not None and -20000 <= value <= 150000:
+                    readings.append(dict(celsius=value/1000, sensor=_read(sensor.with_name(sensor.name.replace('_input', '_label'))) or driver))
+    except OSError:
+        return None
+    return max(readings, key=lambda item: item['celsius']) if readings else None

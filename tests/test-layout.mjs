@@ -3,7 +3,7 @@ import {geometry,plan,point,band,P,D,W,cardLayout,widgetCard,widgetCardLayout,hi
         clockParts,dateParts,spring,settled,stagger,clamp,tone,CONTRAST} from '../extension/render.js';
 
 const EDGES=['right','left','top','bottom'];
-const WIDGETS=['clock','date','weather','battery','system'];
+const WIDGETS=['clock','date','weather','battery','system','cpu','memory','storage','network','uptime','temperature'];
 
 // Every cell, divider, and the gear must stay inside the drawn silhouette.
 for(const edge of EDGES)for(const count of [0,1,3,7,12])for(const widgets of [[],['clock'],WIDGETS]){
@@ -100,10 +100,15 @@ assert.equal(W.semi,600);
 console.log('Geometry, gear centring, sliver size, widgets, spring motion, and contrast checks passed.');
 
 const {headline}=await import('../extension/usage.js');
-const quotas={id:'codex',windows:[{id:'session',fraction:.15},{id:'weekly',fraction:.98}]};
-assert.equal(headline(quotas).id,'weekly');
-assert.equal(headline(quotas,{pinnedWindows:{codex:'session'}}).id,'session');
-assert.equal(headline(quotas,{pinnedWindows:{claude:'session',codex:'removed'}}).id,'weekly');
+const quotas={id:'codex',windows:[{id:'primary',fraction:.15,windowSeconds:18000},{id:'secondary',fraction:.98,windowSeconds:604800}]};
+assert.equal(headline(quotas).id,'primary');
+assert.equal(headline(quotas,{pinnedWindows:{codex:'secondary'}}).id,'secondary');
+assert.equal(headline(quotas,{pinnedWindows:{codex:'removed'}}).id,'primary');
+assert.equal(headline({...quotas,id:'codex:work',kind:'codex'}).id,'primary');
+assert.equal(headline({...quotas,id:'claude',kind:'claude'}).id,'secondary');
+assert.equal(headline({id:'codex',windows:[quotas.windows[1]]}).id,'secondary');
+assert.equal(headline({id:'codex',windows:[{id:'review.primary',fraction:1,windowSeconds:18000},...quotas.windows]}).id,'primary');
+assert.equal(headline({id:'codex',windows:[{id:'primary',fraction:.98,windowSeconds:604800},{id:'secondary',fraction:.15,windowSeconds:18000}]}).id,'secondary');
 assert.equal(headline({windows:[{fraction:NaN},{fraction:-1}]}),null);
 assert.equal(headline({}),null);
 
@@ -134,3 +139,16 @@ const grid=calendarDays({days:[{date:'2026-09-28',tokens:100}]},new Date(2026,8,
 assert.equal(grid[0].weekday,0);assert.equal(grid.at(-1).tokens,100);
 assert.equal(grid.at(-2).tokens,null);assert.equal(grid.at(-1).level,4);
 assert(grid.length>=365&&grid.length<=371);
+
+const {widgetValue,byteText}=await import('../extension/render.js');
+assert.equal(widgetValue('cpu',{cpu:.34}),'34%');
+assert.equal(widgetValue('memory',{mem:.52}),'52%');
+assert.equal(widgetValue('storage',{disk:.41}),'41%');
+assert.equal(widgetValue('network',{}),'—');
+assert.equal(byteText(153600),'150 KiB');
+assert.equal(widgetValue('uptime',{seconds:90061}),'1d 1h');
+assert.equal(widgetValue('temperature',{celsius:54.3}),'54°C');
+for(const kind of WIDGETS){
+ const card=widgetCard(kind,{}),layout=widgetCardLayout(card);
+ assert(Number.isFinite(layout.contentHeight)&&layout.contentHeight===layout.height,'Widget card background matches measured height');
+}

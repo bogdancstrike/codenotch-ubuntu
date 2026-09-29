@@ -23,7 +23,7 @@ from .accounts import profiles as clean_profiles, labels as clean_labels
 
 DEFAULTS=dict(
     edge='right',visibility='hover',scale=1.0,monitor=-1,disabled=[],demo=False,
-    panelIcon=True,hideFullscreen=True,
+    panelIcon=True,hideFullscreen=True,settingsTheme='system',
     peek=True,corner='center',
     pollSeconds=150,idlePollSeconds=600,
     widgets=['clock','date'],
@@ -98,6 +98,7 @@ def configuration(config):
     if out['corner'] not in CORNERS: out['corner']='center'
     if out['dateStyle'] not in DATE_STYLES: out['dateStyle']='medium'
     if out['weatherUnits'] not in ('metric','imperial'): out['weatherUnits']='metric'
+    if out['settingsTheme'] not in ('system','light','dark'): out['settingsTheme']='system'
     if out['textContrast'] not in ('normal','high','higher'): out['textContrast']='high'
     if not isinstance(out['disabled'],list): out['disabled']=[]
     out['disabled']=[x for x in out['disabled'] if isinstance(x,str)]
@@ -183,6 +184,13 @@ def demo_snapshot(providers,settings,cache_root):
         demo_widgets['battery']=dict(percent=76,charging=False,state='Discharging',name='BAT0')
     if 'system' in settings['widgets']:
         demo_widgets['system']=dict(cpu=.34,mem=.52,memUsed=8.3,memTotal=16.0)
+    for kind in ('cpu','memory','storage'):
+        if kind in settings['widgets']:
+            demo_widgets[kind]=dict(cpu=.34,mem=.52,memFree=7.7,memTotal=16,disk=.41,diskFree=295,diskTotal=500)
+    for kind, sample in (
+        ('network',dict(download=153600,upload=25600,received=104857600,sent=10485760,interfaces=['Example network'])),
+        ('uptime',dict(seconds=183600)),('temperature',dict(celsius=54,sensor='Example CPU sensor'))):
+        if kind in settings['widgets']: demo_widgets[kind]=sample
     return dict(version=__version__,settings=settings,providers=out,widgets=demo_widgets,generatedAt=now)
 
 def source_name(p):

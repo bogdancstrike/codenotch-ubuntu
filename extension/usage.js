@@ -2,7 +2,15 @@
 export function headline(provider, settings={}) {
     const windows=(provider.windows??[]).filter(w=>Number.isFinite(w.fraction)&&w.fraction>=0);
     const pin=settings.pinnedWindows?.[provider.id];
-    return windows.find(w=>w.id===pin)??windows.reduce((best,w)=>!best||w.fraction>best.fraction?w:best,null);
+    const pinned=windows.find(w=>w.id===pin);
+    if(pinned)return pinned;
+    if((provider.kind??provider.id?.split(':')[0])==='codex'){
+        // Prefer the main five-hour allowance, never a model/review subquota.
+        const session=windows.find(w=>['primary','secondary'].includes(w.id)&&w.windowSeconds===18000)
+            ??windows.find(w=>w.id==='primary');
+        if(session)return session;
+    }
+    return windows.reduce((best,w)=>!best||w.fraction>best.fraction?w:best,null);
 }
 
 export function percentText(fraction, settings={}, suffix=false) {

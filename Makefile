@@ -3,6 +3,7 @@
 test:
 	PYTHONPATH=backend python3 -m unittest discover -s tests -v
 	node tests/test-layout.mjs
+	node tests/test-history-model.mjs
 
 check:
 	python3 -m compileall -q backend
@@ -12,6 +13,8 @@ check:
 	node --check extension/usage.js
 	node --check extension/history-view.js
 	node --check extension/history-model.js
+	node --check extension/history-widgets.js
+	node --check extension/preferences-style.js
 
 # Redraws docs/preview*.png through the extension's own renderer. The gjs pass
 # uses the real Pango text engine, so it doubles as a load-and-draw smoke test.

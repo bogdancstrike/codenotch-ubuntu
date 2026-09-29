@@ -10,5 +10,6 @@ Description: AI usage notch for Ubuntu GNOME
  Screen-edge usage rings adapted from vinzdg/codenotch, with a settings
  divider, AI selection, per-provider verification, usage tooltips,
  read-only credential discovery, and Wayland/X11 GNOME integration.
- Adds clock, date, weather, battery, and system-load widgets, spring
- animations, a resting sliver, and Pango-rendered text.
+ Includes eleven configurable widgets, local usage analytics, activity
+ charts, model cost estimates, and system/light/dark settings themes.
+ Uses spring animations, a resting sliver, and Pango-rendered text.

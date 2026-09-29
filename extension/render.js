@@ -116,7 +116,7 @@ export function stagger(progress,index,count,share=.42) {
 }
 
 // ---------------------------------------------------------------- geometry
-export const WIDGET_EXTENT={clock:[30,64],date:[40,66],weather:[50,64],battery:[34,54],system:[78,62]};
+export const WIDGET_EXTENT={clock:[30,64],date:[40,66],weather:[50,64],battery:[34,54],system:[78,62],cpu:[40,64],memory:[40,64],storage:[40,64],network:[52,86],uptime:[40,72],temperature:[40,64]};
 function widgetExtent(kind,vertical) {return (WIDGET_EXTENT[kind]??WIDGET_EXTENT.clock)[vertical?0:1];}
 
 /** Ordered cells for the notch: providers, then widgets, then the settings gear. */
@@ -222,12 +222,35 @@ function meter(cr,x,y,w,fraction,hex,alpha) {
     color(cr,hex,alpha);roundRect(cr,x,y,Math.max(2,w*clamp(fraction)),3.4,1.7);cr.fill();
 }
 
+export function byteText(value) {
+    if(!Number.isFinite(value))return '—';
+    const units=['B','KiB','MiB','GiB','TiB'];let i=0;
+    while(value>=1024&&i<units.length-1){value/=1024;i++;}
+    return `${value.toFixed(i&&value<100?1:0)} ${units[i]}`;
+}
+export function widgetValue(kind,data={}) {
+    const s=data??{},key={cpu:'cpu',memory:'mem',storage:'disk'}[kind];
+    if(key)return Number.isFinite(s[key])?`${Math.round(s[key]*100)}%`:'—';
+    if(kind==='temperature')return Number.isFinite(s.celsius)?`${Math.round(s.celsius)}°C`:'—';
+    if(kind==='network')return byteText(s.download).replace(' ','');
+    if(kind==='uptime')return Number.isFinite(s.seconds)?s.seconds>=86400?`${Math.floor(s.seconds/86400)}d ${Math.floor(s.seconds%86400/3600)}h`:`${Math.floor(s.seconds/3600)}h ${Math.floor(s.seconds%3600/60)}m`:'—';
+    return '—';
+}
+
 /** Draw one widget centred in its cell box. `along`/`across` are notch axes. */
 export function drawWidget(cr,kind,data,settings,g,edge,cell,alpha,now=new Date()) {
     const half=cell.extent/2,mid=cell.center,across=g.depth/2;
     const at=(alongOffset,acrossOffset=0)=>point(g,edge,mid+alongOffset,across+acrossOffset);
     const dim=tone(settings,'dim'),muted=tone(settings,'muted');
     const horizontal=!g.vertical;
+    if(['cpu','memory','storage','network','uptime','temperature'].includes(kind)){
+        const title={cpu:'CPU',memory:'RAM',storage:'DISK',network:'NET ↓/s',uptime:'UPTIME',temperature:'CPU TEMP'}[kind];
+        const [x,y]=at(horizontal?0:-half+12);
+        text(cr,title,x,y+(horizontal?-4:0),9,muted,'center',W.semi,{alpha});
+        const [vx,vy]=at(horizontal?0:half-8);
+        text(cr,widgetValue(kind,data),vx,vy+(horizontal?14:0),13,dim,'center',W.semi,{alpha});
+        return;
+    }
     if(kind==='clock'){
         const c=clockParts(settings,now);
         const [x,y]=at(horizontal?0:-half+16);
@@ -447,6 +470,18 @@ export function widgetCard(kind,data,settings={},now=new Date()) {
         if(!Number.isFinite(b.percent))return {title:'Battery',headline:'No system battery',rows:[]};
         return {title:'Battery',headline:`${b.percent}%`,rows:[['State',b.state??(b.charging?'Charging':'Discharging')],['Source',b.name??'BAT0']]};
     }
+    if(['cpu','memory','storage','network','uptime','temperature'].includes(kind)){
+        const s=data??{},title={cpu:'CPU',memory:'Memory',storage:'Storage',network:'Network traffic',uptime:'Uptime',temperature:'CPU temperature'}[kind];
+        if(kind==='cpu')rows.push(['Sampling','Between worker readings']);
+        if(kind==='memory'&&Number.isFinite(s.memFree))rows.push(['Available',`${s.memFree} GiB`],['Total',`${s.memTotal} GiB`]);
+        if(kind==='storage'&&Number.isFinite(s.diskFree))rows.push(['Available',`${s.diskFree} GiB`],['Total',`${s.diskTotal} GiB`],['Filesystem','Root (/)']);
+        if(kind==='network')rows.push(['Download',`${byteText(s.download)}/s`],['Upload',`${byteText(s.upload)}/s`],['Received',byteText(s.received)],['Sent',byteText(s.sent)],['Interfaces',(s.interfaces??[]).join(', ')||'No interfaces'],['Scope','Sum of non-loopback interfaces']);
+        if(kind==='uptime'&&Number.isFinite(s.seconds))rows.push(['Since boot',`${Math.floor(s.seconds/86400)} days, ${Math.floor(s.seconds%86400/3600)} hours, ${Math.floor(s.seconds%3600/60)} minutes`]);
+        if(kind==='temperature')rows.push(['Sensor',s.sensor??'No supported CPU sensor'],['Reading','Highest available CPU sensor']);
+        const value=widgetValue(kind,s);
+        if(value==='—')rows.unshift(['Status',kind==='cpu'||kind==='network'?'Waiting for two samples':'Reading unavailable']);
+        return {title,headline:kind==='network'?`${byteText(s.download)}/s down`:value,rows};
+    }
     if(kind==='system'){
         const s=data??{};
         const free=(available,total)=>`${available} free of ${total} GiB`;
@@ -458,7 +493,8 @@ export function widgetCard(kind,data,settings={},now=new Date()) {
     return {title:kind,headline:'',rows};
 }
 export function widgetCardLayout(card) {
-    return {height:2*D.cardPad+22+(card.headline?32:0)+card.rows.length*26};
+    const height=2*D.cardPad+22+(card.headline?32:0)+card.rows.length*26;
+    return {height,contentHeight:height};
 }
 export function drawWidgetCard(cr,card,width=D.cardWidth,settings={}) {
     const l=widgetCardLayout(card),pad=D.cardPad,inner=width-2*pad;

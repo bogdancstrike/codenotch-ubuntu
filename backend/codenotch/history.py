@@ -184,18 +184,25 @@ def clean_prices(value):
 def summary(db, prices, days=365, now=None, excluded=()):
     today=datetime.fromtimestamp(time.time() if now is None else now).date();first=today-timedelta(days=days-1)
     since=datetime.combine(first,datetime.min.time()).timestamp()
-    daily={};models={};total=0;priced=0;estimated=0.0;sources=set()
+    daily={};models={};breakdown={};total=0;priced=0;priced_records=0;estimated=0.0;sources=set()
     for source,model,project,at,inp,out,read,write in db.execute('SELECT source,model,project,at,input,output,cacheRead,cacheWrite FROM events WHERE at>=? ORDER BY at',(since,)):
         if source in excluded: continue
-        day=datetime.fromtimestamp(at).date().isoformat()
+        local=datetime.fromtimestamp(at);day=local.date().isoformat()
         if day>today.isoformat(): continue
         counts=dict(zip(COUNTERS,(inp,out,read,write)));tokens=sum(counts.values());rates=prices.get(model)
         cost=sum(counts[k]*rates[k] for k in COUNTERS)/1e6 if rates else None
         sources.add(source);total+=tokens
-        if cost is not None: priced+=tokens;estimated+=cost
+        if cost is not None: priced+=tokens;priced_records+=1;estimated+=cost
         item=daily.setdefault(day,dict(date=day,tokens=0,records=0,models={},sources=set()))
         item['tokens']+=tokens;item['records']+=1;item['sources'].add(source)
-        for target,key in ((models,model),(item['models'],model)):
+        detail_key=(day,source,model)
+        if detail_key not in breakdown:
+            breakdown[detail_key]=dict(date=day,source=source,model=model,tokens=0,records=0,
+                                      estimatedCost=0.0,unpricedTokens=0,pricedRecords=0,
+                                      hours=[0]*24,**{k:0 for k in COUNTERS})
+        detail=breakdown[detail_key];detail['hours'][local.hour]+=tokens
+        detail['pricedRecords']+=int(cost is not None)
+        for target,key in ((models,model),(item['models'],model),(breakdown,detail_key)):
             bucket=target.setdefault(key,dict(model=model,tokens=0,records=0,estimatedCost=0.0,unpricedTokens=0,**{k:0 for k in COUNTERS}))
             bucket['tokens']+=tokens;bucket['records']+=1
             for k in COUNTERS: bucket[k]+=counts[k]
@@ -204,8 +211,10 @@ def summary(db, prices, days=365, now=None, excluded=()):
     for item in daily.values():
         item['sources']=sorted(item['sources']);item['models']=sorted(item['models'].values(),key=lambda m:-m['tokens'])
     return dict(days=sorted(daily.values(),key=lambda d:d['date']),models=sorted(models.values(),key=lambda m:-m['tokens']),
-                tokens=total,estimatedCost=estimated if priced else None,unpricedTokens=total-priced,sources=sorted(sources),
-                fromDate=first.isoformat(),toDate=today.isoformat(),timezone=time.tzname[0])
+                tokens=total,estimatedCost=estimated if priced_records else None,unpricedTokens=total-priced,
+                pricedRecords=priced_records,sources=sorted(sources),
+                fromDate=first.isoformat(),toDate=today.isoformat(),timezone=time.tzname[0],
+                breakdown=sorted(breakdown.values(),key=lambda b:(b['date'],b['source'],b['model'])))
 
 
 def collect(root, providers, data, settings, enabled, refresh=True):

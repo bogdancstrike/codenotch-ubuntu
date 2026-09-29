@@ -6,6 +6,7 @@ import GLib from 'gi://GLib';
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
 import {UsagePage} from './history-view.js';
+import {applyTheme,stylePreferences} from './preferences-style.js';
 
 const REPOSITORY='https://github.com/bogdancstrike/codenotch-ubuntu';
 
@@ -15,14 +16,21 @@ const WIDGETS=[
     ['date','Date','Weekday and day of the month.'],
     ['weather','Weather','Open-Meteo conditions for the location you choose. One request every 15 minutes.'],
     ['battery','Battery','System battery charge. Hidden automatically on desktops.'],
-    ['system','System load','CPU and memory meters read from /proc.'],
+    ['system','System overview','CPU, memory and storage together in one widget.'],
+    ['cpu','CPU','Processor utilization between readings.'],
+    ['memory','Memory','RAM utilization and available memory.'],
+    ['storage','Storage','Root filesystem utilization and free space.'],
+    ['network','Network traffic','Download and upload rates, summed across non-loopback interfaces.'],
+    ['uptime','Uptime','Time since this computer last started.'],
+    ['temperature','CPU temperature','Highest supported CPU sensor. Shows unavailable when no sensor exists.'],
 ];
 
 export default class CodenotchPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         window.set_default_size(1100,860);window.set_title('Codenotch Settings');
         this._window=window;this._alive=true;this._writeJobs=new Set();this._rows=new Map();this._queue=[];this._busy=false;this._results=[];
-        Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.FORCE_DARK);
+        applyTheme();window.set_search_enabled(true);
+        this._removeStyle=stylePreferences(window);
 
         const connections=new Adw.PreferencesPage({title:'Connections',icon_name:'network-transmit-receive-symbolic'});
         const widgets=new Adw.PreferencesPage({title:'Widgets',icon_name:'preferences-desktop-symbolic'});
@@ -35,25 +43,31 @@ export default class CodenotchPreferences extends ExtensionPreferences {
         this._integrations=new Adw.PreferencesGroup({title:'AI integrations',description:'Choose the AIs shown in your notch. Verification uses the login already held by each tool.'});
         connections.add(this._integrations);
         this._error=new Adw.ActionRow({title:'Loading connections…'});this._integrations.add(this._error);
-        this._general=new Adw.PreferencesGroup({title:'Polling and data'});connections.add(this._general);
+        this._general=new Adw.PreferencesGroup({title:'Refresh and data'});connections.add(this._general);
+        this._notifications=new Adw.PreferencesGroup({title:'Notifications',description:'Choose when Codenotch should interrupt you.'});connections.add(this._notifications);
 
-        this._widgetGroup=new Adw.PreferencesGroup({title:'Notch widgets',description:'Widgets sit after your AI rings, before the settings gear.'});
+        this._widgetGroup=new Adw.PreferencesGroup({title:'Daily essentials',description:'Choose what you want at a glance. Changes apply immediately.'});
         widgets.add(this._widgetGroup);
+        this._systemWidgets=new Adw.PreferencesGroup({title:'System monitors',description:'Optional local readings. Use the overview or choose individual monitors.'});widgets.add(this._systemWidgets);
+        this._widgetSummary=new Adw.PreferencesGroup({title:'Your notch',description:'Widgets appear after the AI rings. Fewer widgets keep the notch easier to read.'});widgets.add(this._widgetSummary);
+        this._widgetCount=new Adw.ActionRow({title:'Enabled widgets'});this._widgetSummary.add(this._widgetCount);
         this._clockGroup=new Adw.PreferencesGroup({title:'Clock and date'});widgets.add(this._clockGroup);
         this._weatherGroup=new Adw.PreferencesGroup({title:'Weather location',description:'Searched with Open-Meteo. No account, no API key, and no identifiers are sent.'});
         widgets.add(this._weatherGroup);
         this._resultGroup=new Adw.PreferencesGroup();widgets.add(this._resultGroup);
 
+        this._themeGroup=new Adw.PreferencesGroup({title:'Settings appearance',description:'Follow your desktop or choose a light or dark interface.'});appearance.add(this._themeGroup);
         this._appearance=new Adw.PreferencesGroup({title:'Notch',description:'The original black silhouette, rings, and tooltip proportions.'});
         appearance.add(this._appearance);
         this._topBar=new Adw.PreferencesGroup({title:'Top bar',description:'Choose what appears in the Ubuntu top bar. Hide the icon to use only the notch.'});
         appearance.add(this._topBar);
+        this._quotaPresentation=new Adw.PreferencesGroup({title:'Usage display',description:'How quota information appears in the notch and top bar.'});appearance.add(this._quotaPresentation);
         this._readability=new Adw.PreferencesGroup({title:'Readability'});appearance.add(this._readability);
         this._identity=new Adw.PreferencesGroup();about.add(this._identity);
         this._install=new Adw.PreferencesGroup({title:'This install'});about.add(this._install);
         this._care=new Adw.PreferencesGroup({title:'Privacy and maintenance'});about.add(this._care);
 
-        window.connect('close-request',()=>{this._alive=false;this._usage?.destroy();this._process?.force_exit();for(const proc of this._writeJobs)proc.force_exit();return false;});
+        window.connect('close-request',()=>{this._alive=false;this._removeStyle?.();this._usage?.destroy();this._process?.force_exit();for(const proc of this._writeJobs)proc.force_exit();return false;});
         this._run(['--info'],data=>{if(data)this._build(data);});
     }
 
@@ -184,15 +198,16 @@ export default class CodenotchPreferences extends ExtensionPreferences {
         const verifyAll=new Gtk.Button({label:'Verify all',valign:Gtk.Align.CENTER});verify.add_suffix(verifyAll);
         this._general.add(verify);verifyAll.connect('clicked',()=>this._run(['--verify','all']));
 
-        this._toggle(this._general,'Quota notifications','Warn once per window at the threshold and when exhausted.',s.notifyQuota,v=>this._set('notifyQuota',v));
-        this._combo(this._general,'Warning threshold','Percentage used',['75%','80%','90%','95%'],[75,80,90,95],s.notifyThreshold,v=>this._set('notifyThreshold',v));
-        this._toggle(this._general,'Reset notifications','Notify when a previously warned window becomes available.',s.notifyReset,v=>this._set('notifyReset',v));
-        this._toggle(this._general,'Connection notifications','Warn after three failed usage checks.',s.notifyFailures,v=>this._set('notifyFailures',v));
+        this._toggle(this._notifications,'Quota notifications','Warn once per window at the threshold and when exhausted.',s.notifyQuota,v=>this._set('notifyQuota',v));
+        this._combo(this._notifications,'Warning threshold','Percentage used',['75%','80%','90%','95%'],[75,80,90,95],s.notifyThreshold,v=>this._set('notifyThreshold',v));
+        this._toggle(this._notifications,'Reset notifications','Notify when a previously warned window becomes available.',s.notifyReset,v=>this._set('notifyReset',v));
+        this._toggle(this._notifications,'Connection notifications','Warn after three failed usage checks.',s.notifyFailures,v=>this._set('notifyFailures',v));
 
         // ------------------------------------------------------------ widgets
         this._widgetSwitches=new Map();
         for(const [id,title,subtitle] of WIDGETS){
-            const toggle=this._toggle(this._widgetGroup,title,subtitle,(s.widgets??[]).includes(id),()=>this._setWidget());
+            const group=['clock','date','weather','battery'].includes(id)?this._widgetGroup:this._systemWidgets;
+            const toggle=this._toggle(group,title,subtitle,(s.widgets??[]).includes(id),()=>{this._setWidget();this._syncWidgetGroups();});
             this._widgetSwitches.set(id,toggle);
         }
         this._combo(this._clockGroup,'Clock format','',['24-hour','12-hour'],[true,false],s.clock24,v=>this._set('clock24',v));
@@ -211,6 +226,9 @@ export default class CodenotchPreferences extends ExtensionPreferences {
             s.weatherUnits,v=>this._set('weatherUnits',v));
 
         // --------------------------------------------------------- appearance
+        applyTheme(s.settingsTheme);
+        this._combo(this._themeGroup,'Color scheme','Applies immediately to all settings pages.',
+            ['Follow system','Light','Dark'],['system','light','dark'],s.settingsTheme??'system',value=>{applyTheme(value);this._set('settingsTheme',value);});
         this._combo(this._appearance,'Notch visibility','On hover leaves a small sliver on screen so the notch stays findable.',
             ['On hover','Always show','Hidden'],['hover','always','hidden'],s.visibility,v=>this._set('visibility',v));
         this._toggle(this._appearance,'Show the resting sliver','A light handle marks the folded notch. Turn off for a fully black pill.',
@@ -225,13 +243,14 @@ export default class CodenotchPreferences extends ExtensionPreferences {
             ['Automatic',...data.providers.map(p=>p.name)],['',...data.providers.map(p=>p.id)],s.panelAccount,v=>this._set('panelAccount',v));
         this._toggle(this._appearance,'Hide over fullscreen windows','Also hides in Activities and on the lock screen.',
             s.hideFullscreen,v=>this._set('hideFullscreen',v));
-        this._combo(this._appearance,'Quota percentage','Applies to the notch and panel. Colors always reflect usage.',
+        this._combo(this._quotaPresentation,'Quota percentage','Applies to the notch and panel. Colors always reflect usage.',
             ['Used','Remaining'],['used','remaining'],s.quotaDisplay,v=>this._set('quotaDisplay',v));
-        this._toggle(this._appearance,'Usage forecast','Estimated from average usage since the reported window began. Hidden for stale data.',s.forecast,v=>this._set('forecast',v));
-        this._toggle(this._appearance,'Window clock','Outer arc shows elapsed time when the provider reports a duration.',s.windowClock,v=>this._set('windowClock',v));
+        this._toggle(this._quotaPresentation,'Usage forecast','Estimated from average usage since the reported window began. Hidden for stale data.',s.forecast,v=>this._set('forecast',v));
+        this._toggle(this._quotaPresentation,'Window clock','Outer arc shows elapsed time when the provider reports a duration.',s.windowClock,v=>this._set('windowClock',v));
         this._combo(this._readability,'Text contrast','Lifts the secondary labels in the notch and its cards.',
             ['Standard','High (recommended)','Highest'],['normal','high','higher'],s.textContrast,v=>this._set('textContrast',v));
 
+        this._syncWidgetGroups();
         this._usage.sync(s);
         this._buildAbout(data);
         this._update(data);
@@ -312,6 +331,14 @@ export default class CodenotchPreferences extends ExtensionPreferences {
         this._results=[];this._resultGroup.set_title('');
     }
 
+    _syncWidgetGroups() {
+        const active=[...(this._widgetSwitches??[])].filter(([,toggle])=>toggle.active).map(([id])=>id);
+        this._widgetCount.set_subtitle(`${active.length} of ${WIDGETS.length} enabled${active.length>6?' · A smaller selection keeps labels larger.':''}`);
+        this._clockGroup.set_visible(active.includes('clock')||active.includes('date'));
+        this._weatherGroup.set_visible(active.includes('weather'));
+        this._resultGroup.set_visible(active.includes('weather'));
+    }
+
     _update(data) {
         if(BigInt(data.settings?.revision??'0')<BigInt(this._settings?.revision??'0'))return;
         this._syncing=true;
@@ -320,7 +347,8 @@ export default class CodenotchPreferences extends ExtensionPreferences {
             const r=this._rows.get(p.id);if(!r)continue;
             r.row.set_title(p.name);r.toggle.active=p.enabled;
             r.pinKeys=['',...(p.windows??[]).map(w=>w.id)];
-            r.pin.set_model(Gtk.StringList.new(['Automatic (most used)',...(p.windows??[]).map(w=>w.label)]));
+            const automatic=(p.kind??p.id.split(':')[0])==='codex'?'Automatic (5-hour window)':'Automatic (most used)';
+            r.pin.set_model(Gtk.StringList.new([automatic,...(p.windows??[]).map(w=>w.label)]));
             r.pin.set_selected(Math.max(0,r.pinKeys.indexOf(data.settings?.pinnedWindows?.[p.id]??'')));
             r.row.set_subtitle(p.status??'Not checked');
             r.status.set_subtitle(p.message??'Not verified yet');
@@ -330,10 +358,12 @@ export default class CodenotchPreferences extends ExtensionPreferences {
             r.button.set_sensitive(p.enabled);
         }
         if(data.settings&&!this._writes){
-            this._settings=data.settings;this._usage.sync(data.settings);
+            this._settings=data.settings;applyTheme(data.settings.settingsTheme);this._usage.sync(data.settings);
+            this._usage.syncProviders(data.providers);
             this._current?.set_subtitle(data.settings.weatherPlace||'Not set — search above');
             this._refreshAbout(data.settings);
             for(const [id,toggle] of this._widgetSwitches??[])toggle.active=(data.settings.widgets??[]).includes(id);
+            this._syncWidgetGroups();
         }
         this._syncing=false;
     }
