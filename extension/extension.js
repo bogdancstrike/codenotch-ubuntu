@@ -14,7 +14,7 @@ import {D,P,W,plan,point,drawNotch,drawCard,cardLayout,drawWidgetCard,widgetCard
 
 import {headline,percentText,panelAccount} from './usage.js';
 
-const DEFAULTS={edge:'right',visibility:'hover',scale:1,monitor:-1,panelIcon:true,hideFullscreen:true,
+const DEFAULTS={edge:'right',visibility:'hover',scale:1,monitor:-1,panelIcon:true,panelUsage:true,hideFullscreen:true,
     peek:true,widgets:[],clock24:true,clockSeconds:false,dateStyle:'medium',textContrast:'high',demo:false};
 
 // Pango gives real hinting and metrics; cairo's toy text API does not.
@@ -584,7 +584,7 @@ export default class Codenotch extends Extension {
             this._panel=new PanelMenu.Button(0,'Codenotch');
             const box=new St.BoxLayout({style:'spacing: 6px;'});
             box.add_child(new St.Icon({icon_name:'utilities-system-monitor-symbolic',style_class:'system-status-icon'}));
-            this._panelLabel=new St.Label({y_align:Clutter.ActorAlign.CENTER});box.add_child(this._panelLabel);
+            this._panelLabel=new St.Label({y_align:Clutter.ActorAlign.CENTER,visible:!!this._settings.panelUsage});box.add_child(this._panelLabel);
             this._panel.add_child(box);
             this._panelAccounts=new PopupMenu.PopupSubMenuMenuItem('Usage overview');
             this._panel.menu.addMenuItem(this._panelAccounts);

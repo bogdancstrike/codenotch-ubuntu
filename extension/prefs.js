@@ -46,6 +46,8 @@ export default class CodenotchPreferences extends ExtensionPreferences {
 
         this._appearance=new Adw.PreferencesGroup({title:'Notch',description:'The original black silhouette, rings, and tooltip proportions.'});
         appearance.add(this._appearance);
+        this._topBar=new Adw.PreferencesGroup({title:'Top bar',description:'Choose what appears in the Ubuntu top bar. Hide the icon to use only the notch.'});
+        appearance.add(this._topBar);
         this._readability=new Adw.PreferencesGroup({title:'Readability'});appearance.add(this._readability);
         this._identity=new Adw.PreferencesGroup();about.add(this._identity);
         this._install=new Adw.PreferencesGroup({title:'This install'});about.add(this._install);
@@ -217,9 +219,9 @@ export default class CodenotchPreferences extends ExtensionPreferences {
         this._combo(this._appearance,'Monitor','',['Primary display','Display 1','Display 2','Display 3','Display 4'],
             [-1,0,1,2,3],s.monitor,v=>this._set('monitor',v));
         this._combo(this._appearance,'Size','',['75%','100% (original)','125%','150%','200%'],[.75,1,1.25,1.5,2],s.scale,v=>this._set('scale',v));
-        this._toggle(this._appearance,'Top panel icon','Keeps settings reachable when the notch is hidden.',s.panelIcon,v=>this._set('panelIcon',v));
-        this._toggle(this._appearance,'Top panel percentage','Show the selected account beside the panel icon.',s.panelUsage,v=>this._set('panelUsage',v));
-        this._combo(this._appearance,'Panel account','Automatic chooses the most-used enabled account.',
+        this._toggle(this._topBar,'Show icon in top bar','Turn off to hide the entire top-bar indicator, including usage.',s.panelIcon,v=>this._set('panelIcon',v));
+        this._toggle(this._topBar,'Show usage in top bar','Show account usage beside the icon, for example “Claude 25% used”. Turn off to hide this text.',s.panelUsage,v=>this._set('panelUsage',v));
+        this._combo(this._topBar,'Top-bar account','Automatic chooses the most-used enabled account.',
             ['Automatic',...data.providers.map(p=>p.name)],['',...data.providers.map(p=>p.id)],s.panelAccount,v=>this._set('panelAccount',v));
         this._toggle(this._appearance,'Hide over fullscreen windows','Also hides in Activities and on the lock screen.',
             s.hideFullscreen,v=>this._set('hideFullscreen',v));

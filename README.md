@@ -335,7 +335,10 @@ yellow, orange, red at 90%, and deep red when exhausted.
 
 The top panel can show a chosen account's quota or automatically select the most-used
 account. Its Usage overview lists all enabled accounts and reset times from cached
-readings, without extra requests. Configure it under Appearance.
+readings, without extra requests. Configure it under **Appearance → Top bar**.
+Turn off **Show usage in top bar** to hide the account text (such as “Claude 25% used”)
+while keeping the icon, or turn off **Show icon in top bar** to hide the whole indicator
+and use only the notch. Both switches default to on and changes apply immediately.
 
 `codenotch diagnostics` produces a cache-only, allowlisted connection report.
 Connections → Copy report copies the same report. It excludes account labels, paths,
