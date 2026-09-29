@@ -108,3 +108,12 @@ Small positive estimates retain sub-cent precision instead of appearing as $0.00
 
 Settings follow the system light/dark preference by default. Override it under
 **Appearance → Settings appearance → Color scheme**. Cards use native theme colors.
+
+
+Overview uses one shared content width for navigation, summaries, chart cards and the
+calendar. The chart order is daily activity/cost, cumulative recorded tokens, tokens
+by weekday, and hourly activity, followed by the contribution grid. The cumulative
+line sums only recorded tokens; missing records are not interpreted as measured
+zero usage. Weekday totals follow local calendar dates and all active filters.
+Settings pages share the same maximum width, with 24px section gaps and 12px control
+gaps. Smaller screens can still scroll the calendar and tables horizontally.

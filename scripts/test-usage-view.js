@@ -37,6 +37,13 @@ app.connect('activate',()=>{
         };
         const steps=[
             ()=>{capture('overview');assert(view.tabs.overview.get_width()>=800,'Dashboard does not use the wider window');
+                assert(view.chartCards.length===7,'Additional charts missing');
+                const box=widget=>{const [,rect]=widget.compute_bounds(view.tabs.overview);return [Math.round(rect.get_x()),Math.round(rect.get_width())];};
+                const width=box(view.calendarHost.get_first_child())[1],outer=widget=>widget.get_parent()===view.tabs.overview?widget:widget.get_parent();
+                for(const chart of view.chartCards)assert(box(outer(chart))[1]===width,`Chart and calendar card widths differ: ${chart.title} ${box(outer(chart))} vs ${width}`);
+                const tabs=[];for(let child=view.navigation.get_first_child();child;child=child.get_next_sibling())tabs.push(child.get_width());
+                assert(tabs.length===5&&Math.max(...tabs)-Math.min(...tabs)<=1&&box(view.navigation)[1]===width,'Navigation tabs must share the content width');
+                assert(outer(view.chartCards.at(-1)).get_next_sibling()===view.calendarHost,'Calendar must follow the charts');
                 assert(view.calendarGrid.get_width()<=view.gridBox.get_width(),'Overview calendar exceeds content width');
                 assert(view.buttons.length>=365,'Overview calendar missing');assert(view.stats.days.length===30,'Default period');assert(view.stats.unpricedTokens>0,'Partial prices');
                 view.stack.set_visible_child_name('history');},
@@ -47,7 +54,7 @@ app.connect('activate',()=>{
                 view.table.sort.emit('clicked');assert(view.table.ascending,'History sort');
                 view.buttons.at(-1).emit('clicked');assert(view.selected===today,'Day selection');
                 view.stack.set_visible_child_name('models');},
-            ()=>{capture('models');view.drilldown('model','Example Codex model');
+            ()=>{const walk=(w,d)=>{const [a]=w.measure(Gtk.Orientation.VERTICAL,-1);const [b]=w.measure(Gtk.Orientation.VERTICAL,1048576);if(a!==b)print(' '.repeat(d)+w.constructor.name+' '+(w.get_css_classes?.().join('.'))+' '+a+'/'+b+' '+(w.get_label?.()??'').slice(0,40));for(let c=w.get_first_child();c;c=c.get_next_sibling())walk(c,d+1);};walk(view.tabs.models.get_parent().get_parent().get_parent(),0);capture('models');view.drilldown('model','Example Codex model');
                 assert(view.stats.models.length===1&&view.model==='Example Codex model','Model drilldown');
                 assert(view.stats.agents[0].id==='codex','Model source aggregation');
                 view.model='';view.drilldown('source','claude');assert(view.stats.agents.length===1,'Agent drilldown');
@@ -65,7 +72,7 @@ app.connect('activate',()=>{
         ];
         let index=0;
         GLib.timeout_add(GLib.PRIORITY_DEFAULT,350,()=>{
-            try{steps[index++]();}catch(error){printerr(error);printerr(error.stack??'');failed=true;index=steps.length;}
+            try{steps[index++]();}catch(error){printerr(`step ${index-1}: ${error}`);printerr(error.stack??'');failed=true;index=steps.length;}
             if(index<steps.length)return GLib.SOURCE_CONTINUE;
             view.destroy();removeStyle();window.close();app.quit();return GLib.SOURCE_REMOVE;
         });

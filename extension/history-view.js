@@ -2,8 +2,9 @@ import Adw from 'gi://Adw';
 import Gtk from 'gi://Gtk';
 import Gdk from 'gi://Gdk';
 import GLib from 'gi://GLib';
-import {calendarDays,compactCount,usageStats,costText,sourceName,COUNTERS} from './history-model.js';
-import {clear,label,section,metrics,breakdown,barChart,HistoryTable} from './history-widgets.js';
+import {calendarDays,compactCount,usageStats,costText,formatUSD,sourceName,COUNTERS,chartSeries} from './history-model.js';
+import {sizePreferencesPage} from './preferences-style.js';
+import {GAP,INNER,clear,label,button,section,columns,card,metrics,breakdown,barChart,chart,rankChart,HistoryTable} from './history-widgets.js';
 
 const PERIODS=[7,30,90,365];
 const KINDS=[['input','Fresh input'],['output','Output'],['cacheRead','Cache read'],['cacheWrite','Cache write']];
@@ -13,32 +14,28 @@ export class UsagePage {
         this.owner=owner;this.loaded=false;this.loading=false;this.source='';this.model='';this.span=30;
         this.rows=[];this.buttons=[];this.providers=[];this.priceRows=[];
         this.page=new Adw.PreferencesPage({name:'usage',title:'Usage',icon_name:'view-grid-symbolic'});
-        // PreferencesPage does not expose its content width. Locate its native
-        // clamp by type so only this dashboard uses the wider window space.
-        const widen=widget=>{
-            if(widget instanceof Adw.Clamp){widget.set_maximum_size(1000);widget.set_tightening_threshold(900);return true;}
-            for(let child=widget.get_first_child();child;child=child.get_next_sibling())if(widen(child))return true;
-            return false;
-        };
-        widen(this.page);
+        sizePreferencesPage(this.page);
         const heading=new Adw.PreferencesGroup({title:'Usage analytics',description:'Your local token activity, models and estimated API costs.'});this.page.add(heading);
-        const filters=new Gtk.Box({spacing:12,homogeneous:true});heading.add(filters);
+        const filters=new Gtk.Box({spacing:INNER,homogeneous:true});heading.add(filters);
         this.period=this._filter(filters,'Period',PERIODS.map(n=>`Last ${n} days`),1,index=>{this.span=PERIODS[index];this.draw();});
         this.agentFilter=this._filter(filters,'Agent',['All agents'],0,index=>{this.source=this.agentIDs[index]??'';this.draw();});
         this.modelFilter=this._filter(filters,'Model',['All models'],0,index=>{this.model=this.modelIDs[index]??'';this.draw();});
-        const actions=new Gtk.Box({spacing:8,margin_top:12});heading.add(actions);
-        this.status=label('Loading local history…',['dim-label'],{hexpand:true});actions.append(this.status);
-        const reset=new Gtk.Button({label:'Clear filters'});actions.append(reset);
+        const actions=new Gtk.Box({spacing:INNER,margin_top:INNER});heading.add(actions);
+        this.status=label('Loading local history…',['dim-label'],{hexpand:true,valign:Gtk.Align.CENTER});actions.append(this.status);
+        const buttons=new Gtk.Box({spacing:INNER,homogeneous:true});actions.append(buttons);
+        const reset=button('Clear filters');buttons.append(reset);
         reset.connect('clicked',()=>{this.source='';this.model='';this._syncFilters();this.draw();});
-        this.refresh=new Gtk.Button({label:'Refresh',valign:Gtk.Align.CENTER});actions.append(this.refresh);
+        this.refresh=button('Refresh');buttons.append(this.refresh);
         this.refresh.connect('clicked',()=>{this.loaded=false;this.load();});
         const body=new Adw.PreferencesGroup();this.page.add(body);
-        const container=new Gtk.Box({orientation:Gtk.Orientation.VERTICAL,spacing:20});body.add(container);
+        const container=new Gtk.Box({orientation:Gtk.Orientation.VERTICAL,spacing:GAP});body.add(container);
         this.stack=new Gtk.Stack({vhomogeneous:false,transition_type:Gtk.StackTransitionType.NONE});
-        const tabs=new Gtk.StackSwitcher({stack:this.stack,halign:Gtk.Align.START,css_classes:['usage-navigation']});container.append(tabs);container.append(this.stack);
+        // GTK 4.14 StackSwitcher has no homogeneous property; its box layout does.
+        const tabs=new Gtk.StackSwitcher({stack:this.stack,hexpand:true,css_classes:['usage-navigation']});container.append(tabs);container.append(this.stack);
+        tabs.get_layout_manager()?.set_homogeneous?.(true);this.navigation=tabs;
         this.tabs={};
         for(const [id,title] of [['overview','Overview'],['history','History'],['models','Models'],['agents','Agents'],['data','Data']]){
-            const box=new Gtk.Box({orientation:Gtk.Orientation.VERTICAL,spacing:28});this.tabs[id]=box;this.stack.add_titled(box,id,title);
+            const box=new Gtk.Box({orientation:Gtk.Orientation.VERTICAL,spacing:GAP});this.tabs[id]=box;this.stack.add_titled(box,id,title);
         }
         this._buildData();this._installStyle();
     }
@@ -51,10 +48,10 @@ export class UsagePage {
     }
     _installStyle() {
         const css=new Gtk.CssProvider();css.load_from_data(`
-            .usage-metric { padding: 24px; border-radius: 16px; }
-            .usage-metric .title-1 { font-size: 26px; }
-            .usage-chart { padding: 24px; border-radius: 16px; }
-            .usage-table { padding: 12px; }
+            .usage-metric { padding: 16px 24px; border-radius: 12px; }
+            .usage-card { padding: 24px; border-radius: 12px; }
+            .usage-table { padding: 12px; border-radius: 12px; }
+            .usage-rank { padding: 6px 8px; border-radius: 8px; }
             .usage-day { min-width: 8px; min-height: 8px; padding: 0; border-radius: 2px; border: 1px solid transparent; }
             .usage-day:focus { outline: 2px solid @accent_color; outline-offset: 1px; }
             .usage-selected { border-color: @window_fg_color; }
@@ -152,26 +149,39 @@ export class UsagePage {
         if(!this.report.enabled){
             for(const name of ['overview','history','models','agents']){
                 this.tabs[name].append(label('Enable local history to explore your usage.',['title-2']));
-                const button=new Gtk.Button({label:'Open Data settings',halign:Gtk.Align.START});
-                button.connect('clicked',()=>this.stack.set_visible_child_name('data'));this.tabs[name].append(button);
+                const open=button('Open Data settings',{halign:Gtk.Align.START});
+                open.connect('clicked',()=>this.stack.set_visible_child_name('data'));this.tabs[name].append(open);
             }
             this.buttons=[];return;
         }
         if(!this.report.breakdown){
             this.tabs.overview.append(label('Update the Codenotch worker to load detailed analytics.',['heading']));return;
         }
-        const overview=this.tabs.overview;
+        const overview=this.tabs.overview,openDay=entry=>this.openDay(entry.label);
         metrics(overview,[['Total tokens',compactCount(s.tokens),`${s.records.toLocaleString()} usage records`],
-            ['Estimated API cost',costText(s),s.pricedRecords?`${(s.pricedShare*100).toFixed(0)}% of tokens priced`:'Add model prices in Data to see estimates']]);
+            ['Estimated API cost',s.pricedRecords?formatUSD(s.estimatedCost):'—',
+                s.pricedRecords?`${(s.pricedShare*100).toFixed(0)}% of tokens priced`:'Add prices in Data'],
+            ['Active days',`${s.activeDays} of ${s.days.length}`,`Current streak ${s.currentStreak} days`],
+            ['Per active day',compactCount(s.average),`${(s.cacheShare*100).toFixed(1)}% cache read`]]);
         if(!s.records)overview.append(label('No records match this period and these filters. Try a longer period, clear filters, or refresh.',['dim-label']));
-        const calendarHost=new Gtk.Box({orientation:Gtk.Orientation.VERTICAL});overview.append(calendarHost);
-        const trend=new Gtk.Box({orientation:Gtk.Orientation.VERTICAL,spacing:12});overview.append(trend);
-        const metric=new Gtk.DropDown({model:Gtk.StringList.new(['Daily tokens','Daily estimated cost']),selected:this.costMode?1:0,halign:Gtk.Align.END});
-        metric.update_property([Gtk.AccessibleProperty.LABEL],['Daily chart metric']);trend.append(metric);
-        this.trendBody=new Gtk.Box({orientation:Gtk.Orientation.VERTICAL,spacing:12});trend.append(this.trendBody);
+        const metric=new Gtk.DropDown({model:Gtk.StringList.new(['Tokens','Estimated cost']),selected:this.costMode?1:0});
+        metric.update_property([Gtk.AccessibleProperty.LABEL],['Daily chart metric']);
+        this.trendCard=card(overview,'Daily activity','',metric);
+        this.trendBody=new Gtk.Box({orientation:Gtk.Orientation.VERTICAL,spacing:INNER});this.trendCard.append(this.trendBody);
         // Keep the control, focus, and the rest of the page stable when changing metrics.
         metric.connect('notify::selected',()=>{this.costMode=metric.selected===1;this._drawTrend();});this._drawTrend();
-        const detail=this._disclosure(overview,'Activity and token details',`${s.activeDays} active days · ${compactCount(s.average)} tokens per active day · ${(s.cacheShare*100).toFixed(1)}% cache read`);
+        const series=chartSeries(s);
+        this.chartCards=[this.trendCard];
+        this.chartCards.push(barChart(overview,'Token mix by day',series.mix,{mode:'stacked',series:KINDS.map(([,title])=>title),onSelect:openDay}));
+        this.chartCards.push(barChart(overview,'Cumulative recorded tokens',series.cumulative,{mode:'line',onSelect:openDay}));
+        const patterns=columns(overview);
+        this.chartCards.push(barChart(patterns,'Tokens by weekday',series.weekdays,{height:120}));
+        this.chartCards.push(barChart(patterns,'Tokens by hour',s.hours.map((value,hour)=>({label:`${String(hour).padStart(2,'0')}:00`,value:s.records?value:null})),{height:120}));
+        const shares=columns(overview);
+        this.chartCards.push(rankChart(shares,'Top models','Share of tokens · select to filter',s.models,s.tokens,id=>this.drilldown('model',id)));
+        this.chartCards.push(rankChart(shares,'Agents','Share of tokens · select to filter',s.agents,s.tokens,id=>this.drilldown('source',id)));
+        this.calendarHost=new Gtk.Box({orientation:Gtk.Orientation.VERTICAL,hexpand:true});overview.append(this.calendarHost);
+        const detail=this._disclosure(overview,'Streaks and token composition',`Longest streak ${s.longestStreak} days · peak hour ${s.peakHour===null?'—':String(s.peakHour).padStart(2,'0')+':00'}`);
         metrics(detail,[['Current streak',`${s.currentStreak} days`,'Ending today or yesterday'],
             ['Longest streak',`${s.longestStreak} days`,'Within this period'],
             ['Busiest day',s.busiest?.date??'—',s.busiest?`${compactCount(s.busiest.tokens)} tokens`:'No recorded activity'],
@@ -179,65 +189,62 @@ export class UsagePage {
         const kinds=section(detail,'Token composition','Disjoint token categories; cache share is based on total tokens.');
         for(const [key,title] of KINDS){
             const value=s[key],row=new Adw.ActionRow({title,subtitle:`${value.toLocaleString()} tokens · ${s.tokens?(value/s.tokens*100).toFixed(1):'0'}%`});
-            row.add_suffix(new Gtk.ProgressBar({fraction:s.tokens?value/s.tokens:0,width_request:140,valign:Gtk.Align.CENTER}));kinds.add(row);
+            row.add_suffix(new Gtk.ProgressBar({fraction:s.tokens?value/s.tokens:0,width_request:120,valign:Gtk.Align.CENTER}));kinds.add(row);
         }
-        barChart(detail,'Activity by hour',s.hours.map((value,hour)=>({label:`${String(hour).padStart(2,'0')}:00`,value:s.records?value:null})));
-        const favorites=section(detail,'Leading models','Select a model to explore its activity.');
-        breakdown(favorites,s.models.slice(0,5),s.tokens,id=>this.drilldown('model',id));
-        this._drawHistory();this._drawCalendar(calendarHost);
+        this._drawHistory();this._drawCalendar(this.calendarHost);
         const models=section(this.tabs.models,'By model','Shares of tokens in the selected period. Select a model to filter the dashboard.');
         breakdown(models,s.models,s.tokens,id=>this.drilldown('model',id));
         const agents=section(this.tabs.agents,'By agent','Local clients, including imported sources. Select an agent to filter the dashboard.');
         breakdown(agents,s.agents,s.tokens,id=>this.drilldown('source',id));
-        this.quotaBox=new Gtk.Box({orientation:Gtk.Orientation.VERTICAL,spacing:16});this.tabs.agents.append(this.quotaBox);this._renderQuotas();
+        this.quotaBox=new Gtk.Box({orientation:Gtk.Orientation.VERTICAL,spacing:GAP});this.tabs.agents.append(this.quotaBox);this._renderQuotas();
     }
     _disclosure(parent,title,subtitle) {
         this.expandedSections??=new Set();
         const group=section(parent,'');
         const row=new Adw.ExpanderRow({title,subtitle,expanded:this.expandedSections.has(title)});group.add(row);
         row.connect('notify::expanded',()=>{if(row.expanded)this.expandedSections.add(title);else this.expandedSections.delete(title);});
-        const body=new Gtk.Box({orientation:Gtk.Orientation.VERTICAL,spacing:24,margin_top:20,margin_bottom:20,margin_start:16,margin_end:16});row.add_row(body);return body;
+        const body=new Gtk.Box({orientation:Gtk.Orientation.VERTICAL,spacing:GAP,margin_top:GAP,margin_bottom:GAP,margin_start:GAP,margin_end:GAP});row.add_row(body);return body;
     }
     _drawTrend() {
         clear(this.trendBody);const s=this.stats;
-        this.costNotice=null;
+        this.costNotice=null;this.trendCard.subtitle.set_visible(false);
         if(this.costMode&&!s.pricedRecords){
-            const box=new Gtk.Box({orientation:Gtk.Orientation.VERTICAL,spacing:12,css_classes:['card','usage-chart']});this.trendBody.append(box);
-            this.costNotice=label(s.records?'Add prices to see daily estimates':'No usage records in this period',['title-2']);box.append(this.costNotice);
-            box.append(label(s.records?'Token records do not include subscription charges. Set API prices for your models to calculate daily estimates.':'Choose another period or refresh local records.',['dim-label']));
+            this.costNotice=label(s.records?'Add prices to see daily estimates':'No usage records in this period',['title-4']);this.trendBody.append(this.costNotice);
+            this.trendBody.append(label(s.records?'Token records do not include subscription charges. Set API prices for your models to calculate daily estimates.':'Choose another period or refresh local records.',['dim-label']));
             if(s.records){
-                this.priceAction=new Gtk.Button({label:'Set model prices',halign:Gtk.Align.START,css_classes:['suggested-action']});box.append(this.priceAction);
+                this.priceAction=button('Set model prices',{halign:Gtk.Align.START,css_classes:['suggested-action']});this.trendBody.append(this.priceAction);
                 this.priceAction.connect('clicked',()=>this.stack.set_visible_child_name('data'));
             }
             return;
         }
-        if(this.costMode&&s.unpricedTokens>0)this.trendBody.append(label(`Partial estimate · ${compactCount(s.unpricedTokens)} tokens have no configured price. Add prices in Data to include them.`,['dim-label']));
-        barChart(this.trendBody,this.costMode?'Daily estimated API cost':'Daily token activity',s.days.map(d=>({label:d.date,
+        if(this.costMode&&s.unpricedTokens>0)this.trendBody.append(label(`Partial estimate · ${compactCount(s.unpricedTokens)} tokens have no configured price. Add prices in Data to include them.`,['caption','dim-label']));
+        chart(this.trendBody,s.days.map(d=>({label:d.date,
             value:!d.recorded?null:this.costMode?(d.pricedRecords?d.estimatedCost:null):d.tokens,
-            partial:this.costMode&&d.unpricedTokens>0})),{unit:this.costMode?'USD':'tokens',onSelect:entry=>this.openDay(entry.label)});
+            partial:this.costMode&&d.unpricedTokens>0})),{unit:this.costMode?'USD':'tokens',scale:this.trendCard.subtitle,
+            title:this.costMode?'Daily estimated API cost':'Daily token activity',onSelect:entry=>this.openDay(entry.label)});
     }
     _drawHistory() {
         const parent=this.tabs.history,s=this.stats;
         const history=section(parent,'Day by day','Recorded days only. Values are abbreviated; hover a cell for its exact count.');
         const tableBox=new Gtk.Box({orientation:Gtk.Orientation.VERTICAL});history.add(tableBox);
         this.table=new HistoryTable(tableBox,day=>this.openDay(day.date));this.table.setRows(s.days);
-        this.dayGroup=section(parent,'Day details');this.dayBox=new Gtk.Box({orientation:Gtk.Orientation.VERTICAL,spacing:8,focusable:true});this.dayGroup.add(this.dayBox);
+        this.dayGroup=section(parent,'Day details');this.dayBox=new Gtk.Box({orientation:Gtk.Orientation.VERTICAL,spacing:INNER,focusable:true});this.dayGroup.add(this.dayBox);
         const months=section(parent,'By month','Within the selected period and filters.');breakdown(months,s.months,s.tokens);
     }
     _drawCalendar(parent) {
-        const calendar=section(parent,'Year in tokens','Agent and model filters apply. The calendar includes all available history, independent of the period selector.');
+        const calendar=card(parent,'Year in tokens','All available history · agent and model filters apply. Select a day for details.');
         const year=usageStats(this.report,{span:365,source:this.source,model:this.model});
         const cells=calendarDays({days:year.days.filter(d=>d.recorded)},new Date(`${this.report.toDate}T12:00:00`));
-        this.gridBox=new Gtk.Box({orientation:Gtk.Orientation.VERTICAL,spacing:10,margin_top:12,margin_bottom:12});calendar.add(this.gridBox);
+        this.gridBox=new Gtk.Box({orientation:Gtk.Orientation.VERTICAL,spacing:INNER,hexpand:true});calendar.append(this.gridBox);
         const scroll=new Gtk.ScrolledWindow({hscrollbar_policy:Gtk.PolicyType.AUTOMATIC,vscrollbar_policy:Gtk.PolicyType.NEVER});this.gridBox.append(scroll);
-        const grid=new Gtk.Grid({column_spacing:3,row_spacing:3,halign:Gtk.Align.CENTER});scroll.set_child(grid);this.calendarGrid=grid;
-        for(const [row,text] of [[1,'Mon'],[3,'Wed'],[5,'Fri']])grid.attach(label(text,['dim-label']),0,row,1,1);
+        const grid=new Gtk.Grid({column_spacing:3,row_spacing:3,halign:Gtk.Align.FILL,hexpand:true});scroll.set_child(grid);this.calendarGrid=grid;
+        for(const [row,text] of [[1,'Mon'],[3,'Wed'],[5,'Fri']])grid.attach(label(text,['caption','dim-label'],{margin_end:6}),0,row,1,1);
         this.buttons=[];
         cells.forEach((cell,index)=>{
             const col=Math.floor(index/7)+1;
-            if(cell.month)grid.attach(label(cell.month,['dim-label']),col,0,3,1);
+            if(cell.month)grid.attach(label(cell.month,['caption','dim-label'],{wrap:false}),col,0,3,1);
             const description=`${cell.date}: ${cell.tokens===null?'no recorded data':cell.tokens.toLocaleString()+' tokens'}`;
-            const button=new Gtk.Button({tooltip_text:description,width_request:10,height_request:10,
+            const button=new Gtk.Button({tooltip_text:description,width_request:10,height_request:13,hexpand:true,
                 css_classes:['usage-day',cell.level<0?'usage-missing':cell.level===0?'usage-zero':`usage-${cell.level}`]});
             button.update_property([Gtk.AccessibleProperty.LABEL],[description]);button.connect('clicked',()=>this.openDay(cell.date));
             const keys=new Gtk.EventControllerKey();keys.connect('key-pressed',(_controller,key)=>{
@@ -245,7 +252,13 @@ export class UsagePage {
                 if(delta===undefined)return false;this.buttons[Math.max(0,Math.min(this.buttons.length-1,index+delta))]?.grab_focus();return true;
             });button.add_controller(keys);grid.attach(button,col,cell.weekday+1,1,1);this.buttons.push(button);
         });
-        this.gridBox.append(label('No record  ▪   Less  ▪ ▪ ▪ ▪  More tokens',['caption','dim-label'],{xalign:1}));
+        const legend=new Gtk.Box({spacing:6,halign:Gtk.Align.END});this.gridBox.append(legend);
+        legend.append(label('No record',['caption','dim-label']));
+        for(const level of ['missing','1','2','3','4']){
+            if(level==='1')legend.append(label('Less',['caption','dim-label']));
+            legend.append(new Gtk.Box({width_request:10,height_request:10,valign:Gtk.Align.CENTER,css_classes:[`usage-${level}`]}));
+        }
+        legend.append(label('More tokens',['caption','dim-label']));
         this.select(cells.find(c=>c.date===this.selected)??[...cells].reverse().find(c=>c.row)??cells.at(-1));
     }
     openDay(date) {
@@ -294,7 +307,7 @@ export class UsagePage {
                 input.set_value(rates?.[key]??0);item.add_suffix(input);row.add_row(item);inputs[key]=input;
             }
             const saveRow=new Adw.ActionRow({title:'Apply model prices',subtitle:'Zero explicitly means free. Estimates update after saving.'});
-            const save=new Gtk.Button({label:'Save prices',valign:Gtk.Align.CENTER});saveRow.add_suffix(save);row.add_row(saveRow);
+            const save=button('Save prices');saveRow.add_suffix(save);row.add_row(saveRow);
             save.connect('clicked',()=>{
                 const value={...this.owner._settings.modelPrices,[name]:Object.fromEntries(COUNTERS.map(key=>[key,inputs[key].get_value()]))};
                 this.owner._set('modelPrices',value,()=>{this.loaded=false;this.load();});

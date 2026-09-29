@@ -9,3 +9,5 @@ Continue inline with the existing UI/UX and testing skills. Preserve all pending
 - Run backend, geometry, analytics, GJS load, and renderer checks as permitted. Commit/push each task if Git access returns. The current sandbox denies `.git` writes and desktop display access.
 
 Implemented: six widgets, grouped/conditional settings, theme choice, quieter Usage cards, expandable secondary metrics, activity grid on Overview, explicit missing-price action and sub-cent cost formatting. Offline Cairo widget preview succeeds. Native GTK visual verification and commits remain blocked by environment restrictions. The pre-existing modified .deb was preserved.
+
+Screenshot follow-up: use a shared 1000px content clamp on every settings page, full-width Usage navigation and metric cards, 12px control gaps and 24px section spacing. Add cumulative recorded-token and weekday charts, show hourly activity above the calendar, and place the calendar in a full-width card below all charts. Validate derived series and rebuild the installer.

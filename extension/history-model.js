@@ -77,3 +77,20 @@ export function usageStats(report,{span=30,source='',model=''}={}) {
         peakHour:total.hours.some(n=>n>0)?total.hours.indexOf(Math.max(...total.hours)):null,
         topModel:sortedModels[0]??null};
 }
+
+// Missing days add no records to the running total; their absence is not a measured zero.
+export function chartSeries(stats) {
+    let cumulative=0;
+    const weekdays=Array.from({length:7},(_,i)=>({label:['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][i],value:null}));
+    const running=stats.days.map(day=>{
+        if(day.recorded){
+            cumulative+=day.tokens;
+            const [year,month,date]=day.date.split('-').map(Number);
+            const index=(new Date(year,month-1,date,12).getDay()+6)%7;
+            weekdays[index].value=(weekdays[index].value??0)+day.tokens;
+        }
+        return {label:day.date,value:stats.records?cumulative:null};
+    });
+    const mix=stats.days.map(day=>({label:day.date,value:day.recorded?day.tokens:null,parts:COUNTERS.map(key=>day[key])}));
+    return {cumulative:running,weekdays,mix};
+}

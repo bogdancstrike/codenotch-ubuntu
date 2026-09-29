@@ -6,7 +6,7 @@ import GLib from 'gi://GLib';
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
 import {UsagePage} from './history-view.js';
-import {applyTheme,stylePreferences} from './preferences-style.js';
+import {applyTheme,stylePreferences,sizePreferencesPage} from './preferences-style.js';
 
 const REPOSITORY='https://github.com/bogdancstrike/codenotch-ubuntu';
 
@@ -37,7 +37,7 @@ export default class CodenotchPreferences extends ExtensionPreferences {
         const appearance=new Adw.PreferencesPage({title:'Appearance',icon_name:'preferences-desktop-appearance-symbolic'});
         const about=new Adw.PreferencesPage({title:'About',icon_name:'help-about-symbolic'});
         this._usage=new UsagePage(this);
-        for(const page of [connections,widgets,appearance,this._usage.page,about])window.add(page);
+        for(const page of [connections,widgets,appearance,this._usage.page,about]){sizePreferencesPage(page);window.add(page);}
         window.connect('notify::visible-page',()=>{if(window.get_visible_page()===this._usage.page&&this._settings)this._usage.load();});
 
         this._integrations=new Adw.PreferencesGroup({title:'AI integrations',description:'Choose the AIs shown in your notch. Verification uses the login already held by each tool.'});

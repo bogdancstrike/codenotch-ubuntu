@@ -40,3 +40,15 @@ console.log('Usage aggregation, filters, cost coverage, sparse days, streaks and
 
 assert.notEqual(costText({pricedRecords:1,estimatedCost:.003,unpricedTokens:0}),'$0.00');
 assert.equal(costText({pricedRecords:1,estimatedCost:.000001,unpricedTokens:0}),'<$0.0001');
+
+const {chartSeries}=await import('../extension/history-model.js');
+const chartStats=usageStats(report,{span:7}),series=chartSeries(chartStats);
+assert.equal(series.cumulative.at(-1).value,chartStats.tokens);
+assert.equal(series.weekdays.reduce((sum,day)=>sum+(day.value??0),0),chartStats.tokens);
+assert.equal(series.weekdays[0].label,'Mon');
+assert.equal(series.weekdays[1].value,100); // Tuesday, 2026-09-29
+assert.equal(series.weekdays[2].value,null); // No Wednesday record
+assert(series.cumulative.every((point,i)=>i===0||point.value>=series.cumulative[i-1].value));
+assert(chartSeries(usageStats({...report,breakdown:[]})).cumulative.every(point=>point.value===null));
+assert.equal(series.mix.length,chartStats.days.length);
+assert(series.mix.every((point,i)=>chartStats.days[i].recorded?point.parts.reduce((a,b)=>a+b,0)===chartStats.days[i].input+chartStats.days[i].output+chartStats.days[i].cacheRead+chartStats.days[i].cacheWrite:point.value===null));
