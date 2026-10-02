@@ -35,17 +35,19 @@ def require(windows):
         raise ProviderError('unmetered', 'This account reports no usage windows.')
     return windows
 
+SPANS = {'session': 18000, 'weekly_all': 604800, 'weekly_opus': 604800, 'weekly_sonnet': 604800}
+
 def claude(data, now):
     labels = {'session': 'Current session', 'weekly_all': 'All models', 'weekly_opus': 'Opus', 'weekly_sonnet': 'Sonnet'}
     out = {}
     for row in data.get('limits') or []:
         if isinstance(row, dict) and row.get('resets_at') and number(row.get('percent')) is not None:
             key = str(row.get('kind', 'usage'))
-            out[key] = window(key, labels.get(key, key.replace('_', ' ').title()), row['percent'], row['resets_at'])
+            out[key] = window(key, labels.get(key, key.replace('_', ' ').title()), row['percent'], row['resets_at'], SPANS.get(key))
     for key, field in [('session','five_hour'),('weekly_all','seven_day'),('weekly_opus','seven_day_opus'),('weekly_sonnet','seven_day_sonnet')]:
         row = data.get(field)
         if key not in out and isinstance(row,dict) and number(row.get('utilization')) is not None:
-            out[key] = window(key, labels[key], row['utilization'], row.get('resets_at'))
+            out[key] = window(key, labels[key], row['utilization'], row.get('resets_at'), SPANS.get(key))
     for key,row in data.items():
         if key in ('five_hour','seven_day','seven_day_opus','seven_day_sonnet'): continue
         if isinstance(row,dict) and key.startswith(('five_hour','seven_day')) and number(row.get('utilization')) is not None:

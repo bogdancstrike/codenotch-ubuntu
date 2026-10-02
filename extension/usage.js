@@ -4,12 +4,14 @@ export function headline(provider, settings={}) {
     const pin=settings.pinnedWindows?.[provider.id];
     const pinned=windows.find(w=>w.id===pin);
     if(pinned)return pinned;
-    if((provider.kind??provider.id?.split(':')[0])==='codex'){
-        // Prefer the main five-hour allowance, never a model/review subquota.
-        const session=windows.find(w=>['primary','secondary'].includes(w.id)&&w.windowSeconds===18000)
-            ??windows.find(w=>w.id==='primary');
-        if(session)return session;
-    }
+    // Prefer the current five-hour session over weekly limits, never a
+    // model/review subquota: Claude names it 'session', Codex reports it as
+    // a primary/secondary window lasting 18000 seconds.
+    const codex=(provider.kind??provider.id?.split(':')[0])==='codex';
+    const session=windows.find(w=>w.id==='session')
+        ??windows.find(w=>!String(w.id??'').includes('.')&&w.windowSeconds===18000)
+        ??(codex?windows.find(w=>w.id==='primary'):null);
+    if(session)return session;
     return windows.reduce((best,w)=>!best||w.fraction>best.fraction?w:best,null);
 }
 
