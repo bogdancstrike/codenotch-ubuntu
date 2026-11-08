@@ -157,6 +157,9 @@ class Provider:
             return kimi(request_json('https://api.kimi.com/coding/v1/usages',{'Authorization':'Bearer '+token}),time.time())
         elif self.kind=='gemini':
             return antigravity_quota(home,config,self.attempts)
+        elif self.kind in ('ollama','lmstudio'):
+            from .runtimes import fetch as runtime_fetch
+            return runtime_fetch(self.kind,home)
         else: raise ProviderError('error','Unknown provider.')
         if self.kind not in ('cursor','glm') and not token: auth_error()
         if token: headers['Authorization']='Bearer '+token
@@ -203,6 +206,8 @@ def discover(home,config,data,settings=None):
         Provider('opencode','OpenCode','opencode',data/'opencode/auth.json'),
         Provider('copilot','GitHub Copilot','copilot',config/'github-copilot'),
         Provider('kimi','Kimi Code','kimi',home/'.kimi'),
+        Provider('ollama','Ollama','ollama',home/'.ollama'),
+        Provider('lmstudio','LM Studio','lmstudio',home/'.lmstudio'),
     ])
     for kind in ('codex','grok'):
         for directory in sorted(home.glob('.'+kind+'-*')):
@@ -227,6 +232,9 @@ def detected(provider,home,config,data):
     if provider.kind=='kimi': return (home/'.kimi/config.toml').is_file() or (data/'opencode/auth.json').is_file()
     if provider.kind=='glm': return bool(glm_key(home,config,data))
     if provider.kind=='gemini': return antigravity_signed_in(home,config)
+    if provider.kind in ('ollama','lmstudio'):
+        from .runtimes import installed
+        return installed(provider.kind,home)
     return provider.path.exists()
 
 def antigravity_signed_in(home,config):

@@ -71,6 +71,7 @@ export default class CodenotchPreferences extends ExtensionPreferences {
         this._error=new Adw.ActionRow({title:'Loading connections…'});this._integrations.add(this._error);
         this._general=new Adw.PreferencesGroup({title:'Refresh and data'});connections.add(this._general);
         this._notifications=new Adw.PreferencesGroup({title:'Notifications',description:'Choose when Codenotch should interrupt you.'});connections.add(this._notifications);
+        this._autoContinue=new Adw.PreferencesGroup({title:'Auto-continue',description:'Switch it on for a session from its account’s hover card in the notch. An idle session is sent this prompt once per interval, and right after an exhausted 5-hour or weekly limit resets. Sessions in tmux get it typed into their terminal. Other Claude Code and Codex sessions are resumed in the background with the permissions they were started with.'});connections.add(this._autoContinue);
 
         this._widgetSummary=new Adw.PreferencesGroup({title:'Your notch',description:'Widgets appear after the AI rings in the order listed here. Fewer widgets keep the notch easier to read.'});widgets.add(this._widgetSummary);
         this._widgetCount=new Adw.ActionRow({title:'Enabled widgets'});this._widgetSummary.add(this._widgetCount);
@@ -90,6 +91,8 @@ export default class CodenotchPreferences extends ExtensionPreferences {
         this._topBar=new Adw.PreferencesGroup({title:'Top bar',description:'Choose what appears in the Ubuntu top bar. Hide the icon to use only the notch.'});
         appearance.add(this._topBar);
         this._quotaPresentation=new Adw.PreferencesGroup({title:'Usage display',description:'How quota information appears in the notch and top bar.'});appearance.add(this._quotaPresentation);
+        this._colorGroup=new Adw.PreferencesGroup({title:'Ring colours',description:'Where a ring turns amber and red.'});appearance.add(this._colorGroup);
+        this._orderGroup=new Adw.PreferencesGroup({title:'Ring order',description:'In what order the notch draws its AI rings.'});appearance.add(this._orderGroup);
         this._readability=new Adw.PreferencesGroup({title:'Readability'});appearance.add(this._readability);
         this._identity=new Adw.PreferencesGroup({title:'Codenotch'});about.add(this._identity);
         this._install=new Adw.PreferencesGroup({title:'This install'});about.add(this._install);
@@ -291,6 +294,12 @@ export default class CodenotchPreferences extends ExtensionPreferences {
         this._toggle(this._notifications,'Quota notifications','Warn once per window at the threshold and when exhausted.',s.notifyQuota,v=>this._set('notifyQuota',v));
         this._combo(this._notifications,'Warning threshold','Percentage used',['75%','80%','90%','95%'],[75,80,90,95],s.notifyThreshold,v=>this._set('notifyThreshold',v));
         this._toggle(this._notifications,'Reset notifications','Notify when a previously warned window becomes available.',s.notifyReset,v=>this._set('notifyReset',v));
+        this._combo(this._autoContinue,'Nudge interval','How long a switched-on session must sit idle before it is prompted again.',
+            ['Every 15 minutes','Every 30 minutes','Every hour (default)','Every 2 hours','Every 3 hours','Every 5 hours'],[15,30,60,120,180,300],
+            s.autoContinueMinutes??60,v=>this._set('autoContinueMinutes',v));
+        const prompt=new Adw.EntryRow({title:'Prompt',text:s.autoContinuePrompt??'',show_apply_button:true});this._autoContinue.add(prompt);
+        prompt.connect('apply',()=>this._set('autoContinuePrompt',prompt.get_text()));
+        this._toggle(this._notifications,'Session notifications','Say when an agent finishes working or starts waiting for your input.',s.notifySessions,v=>this._set('notifySessions',v));
         this._toggle(this._notifications,'Connection notifications','Warn after three failed usage checks.',s.notifyFailures,v=>this._set('notifyFailures',v));
 
         // ------------------------------------------------------------ widgets
@@ -337,6 +346,16 @@ export default class CodenotchPreferences extends ExtensionPreferences {
             ['Used','Remaining'],['used','remaining'],s.quotaDisplay,v=>this._set('quotaDisplay',v));
         this._toggle(this._quotaPresentation,'Usage forecast','Estimated from average usage since the reported window began. Hidden for stale data.',s.forecast,v=>this._set('forecast',v));
         this._toggle(this._quotaPresentation,'Window clock','Outer arc shows elapsed time when the provider reports a duration.',s.windowClock,v=>this._set('windowClock',v));
+        segmented(this._quotaPresentation,'Weekly ring','A second, thinner ring for the weekly limit, for accounts that report one.',
+            ['Off','Inside','Outside'],['off','inner','outer'],s.weeklyRing??'off',v=>this._set('weeklyRing',v));
+        this._combo(this._colorGroup,'Watch','The ring turns amber from here.',['50%','60%','70% (default)','80%'],[50,60,70,80],s.watchThreshold??70,v=>this._set('watchThreshold',v));
+        this._combo(this._colorGroup,'Critical','The ring turns red, and the resting sliver glows, from here.',['80%','85%','90% (default)','95%'],[80,85,90,95],s.criticalThreshold??90,v=>this._set('criticalThreshold',v));
+        segmented(this._colorGroup,'Colour change','Smooth blends between thresholds; stepped holds each colour until the next one.',
+            ['Smooth','Stepped'],['smooth','stepped'],s.bandStyle??'smooth',v=>this._set('bandStyle',v));
+        this._combo(this._orderGroup,'Order','Automatic orders sink spent and unmeasured rings to the end.',
+            ['Manual','Most remaining first','Burn deficit (would expire unused first)','Expiring first (soonest reset)'],['manual','remaining','deficit','expiring'],
+            s.ringOrder??'manual',v=>{this._settings.ringOrder=v;this._set('ringOrder',v);this._renderOrder();});
+        this._orderRows=[];this._renderOrder(data.providers);
         segmented(this._readability,'Text contrast','Lifts the secondary labels in the notch and its cards. High is recommended.',
             ['Standard','High','Highest'],['normal','high','higher'],s.textContrast,v=>this._set('textContrast',v));
 
@@ -429,6 +448,33 @@ export default class CodenotchPreferences extends ExtensionPreferences {
         this._weatherGroup.set_visible(located);this._resultGroup.set_visible(located);
     }
 
+    /** Manual arrangement: one row per account with up and down buttons. */
+    _renderOrder(providers=this._orderProviders) {
+        if(!this._orderGroup)return;
+        this._orderProviders=providers??[];
+        for(const row of this._orderRows)this._orderGroup.remove(row);this._orderRows=[];
+        if((this._settings.ringOrder??'manual')!=='manual')return;
+        const saved=this._settings.providerOrder??[];
+        const list=[...this._orderProviders].filter(p=>p.enabled).sort((a,b)=>{
+            const i=saved.indexOf(a.id),j=saved.indexOf(b.id);
+            return (i<0?1e6+this._orderProviders.indexOf(a):i)-(j<0?1e6+this._orderProviders.indexOf(b):j);
+        });
+        list.forEach((p,index)=>{
+            const row=new Adw.ActionRow({title:p.name,use_markup:false});
+            row.add_prefix(glyphIcon(p.glyph??p.kind??p.id.split(':')[0],18));
+            const move=delta=>{
+                const ids=list.map(x=>x.id),to=index+delta;
+                [ids[index],ids[to]]=[ids[to],ids[index]];
+                this._settings.providerOrder=ids;this._set('providerOrder',ids);this._renderOrder();
+            };
+            for(const [icon,delta,tip] of [['go-up-symbolic',-1,'Move earlier'],['go-down-symbolic',1,'Move later']]){
+                const button=new Gtk.Button({icon_name:icon,valign:Gtk.Align.CENTER,tooltip_text:tip,css_classes:['flat']});
+                button.set_sensitive(index+delta>=0&&index+delta<list.length);
+                button.connect('clicked',()=>move(delta));row.add_suffix(button);
+            }
+            this._orderGroup.add(row);this._orderRows.push(row);
+        });
+    }
     _update(data) {
         if(BigInt(data.settings?.revision??'0')<BigInt(this._settings?.revision??'0'))return;
         this._syncing=true;
@@ -458,6 +504,8 @@ export default class CodenotchPreferences extends ExtensionPreferences {
         }
         if(data.settings&&!this._writes){
             this._settings=data.settings;applyTheme(data.settings.settingsTheme);this._theme?.set(data.settings.settingsTheme??'system');this._usage.sync(data.settings);
+            const orderKey=`${data.settings.ringOrder}|${(data.settings.providerOrder??[]).join(',')}|${(data.providers??[]).map(p=>p.id+':'+p.enabled+':'+p.name).join(',')}`;
+            if(orderKey!==this._orderKey){this._orderKey=orderKey;this._renderOrder(data.providers);}
             this._usage.syncProviders(data.providers);
             this._current?.set_subtitle(data.settings.weatherPlace||'Not set — search above');
             this._refreshAbout(data.settings);

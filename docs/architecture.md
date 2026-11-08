@@ -23,6 +23,8 @@ shell launches asynchronously and reads back as a single JSON snapshot.
 | `backend/codenotch/providers.py` | Worker | Credential discovery and the seven usage adapters |
 | `backend/codenotch/model.py` | Worker | Payload parsers. Missing data stays missing |
 | `backend/codenotch/activity.py` | Worker | Which AI sessions are running right now |
+| `backend/codenotch/runtimes.py` | Worker | Ollama and LM Studio: loaded models over loopback, LM Studio speed from its log |
+| `backend/codenotch/autocontinue.py` | Worker | Per-session auto-continue: scheduling, tmux / headless-resume delivery |
 | `backend/codenotch/widgets.py` | Worker | Weather, battery, and `/proc` + `statvfs` load |
 
 `render.js` has no GNOME imports. That is deliberate: the same module draws the README
@@ -139,6 +141,23 @@ a minute at most. `nextPoll` and `retryAt` live in the cache, so a restart does 
 backoff, and HTTP 429 with `Retry-After` is always honoured.
 
 ---
+
+## Auto-continue
+
+Each session row in the snapshot has a stable `key` (`<provider id>#<session id>`, or
+`#pid:<pid>:<start>` for CLIs with no session store) and an `autoContinue` summary.
+`activity.sessions()` also attaches a private `target` (pid, cwd, tmux pane, resume
+argv). `autocontinue.evaluate()` always removes it before the snapshot is written, so
+pids, sockets and command lines never reach the cache.
+
+Evaluation runs in the polling cycle, after provider fetches and outside the settings
+lock, because a tmux delivery takes a few hundred milliseconds. A nudge is due when the
+session is idle, no earlier nudge is still running, and both of these have passed:
+the last activity or nudge plus the interval, and the latest reset of any exhausted
+window plus 90 s. Per-session memory (`last`, `sentAt`, the child's pid and start
+time) lives in `~/.cache/codenotch/autocontinue.json`. The switch states live in
+settings as `autoContinue: {key: enabled-at}`, and `--auto-continue KEY on|off`
+changes one key under the settings lock.
 
 ## Credentials
 

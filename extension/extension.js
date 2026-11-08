@@ -10,9 +10,9 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as BoxPointer from 'resource:///org/gnome/shell/ui/boxpointer.js';
 import {D,P,W,plan,point,drawNotch,drawCard,cardLayout,drawWidgetCard,widgetCard,widgetCardLayout,
-        hitTest,color,setTextEngine,resetCopy,band,spring,settled,clamp} from './render.js';
+        hitTest,color,setTextEngine,resetCopy,band,spring,settled,clamp,configureBands} from './render.js';
 
-import {headline,percentText,panelAccount} from './usage.js';
+import {headline,percentText,panelAccount,orderProviders} from './usage.js';
 
 const DEFAULTS={edge:'right',visibility:'hover',scale:1,monitor:-1,panelIcon:true,panelUsage:true,hideFullscreen:true,
     peek:true,widgets:[],clock24:true,clockSeconds:false,dateStyle:'medium',textContrast:'high',demo:false};
@@ -78,7 +78,7 @@ export default class Codenotch extends Extension {
             const delta=direction===Clutter.ScrollDirection.SMOOTH?event.get_scroll_delta()[1]*35:direction===Clutter.ScrollDirection.UP?-45:45;
             this._scrollCard(delta);return Clutter.EVENT_STOP;
         });
-        this._card.connect('button-press-event',()=>{this._card.grab_key_focus();return Clutter.EVENT_PROPAGATE;});
+        this._card.connect('button-press-event',(_actor,event)=>{this._card.grab_key_focus();return this._onCardPress(event);});
         this._card.connect('key-press-event',(_actor,event)=>{
             const key=event.get_key_symbol();
             if(key===Clutter.KEY_Down||key===Clutter.KEY_Up){this._scrollCard(key===Clutter.KEY_Down?45:-45);return Clutter.EVENT_STOP;}
@@ -130,10 +130,11 @@ export default class Codenotch extends Extension {
     _removeTimer(id){if(id&&this._sources.has(id)){GLib.source_remove(id);this._sources.delete(id);}}
     /** Everything the notch draws, as one comparable string. */
     _digest() {
-        const rings=this._providers.map(p=>`${p.id}:${p.status}:${headline(p,this._settings)?.fraction??''}:${(p.sessions??[]).map(s=>s.state).join('')}`).join('|');
+        const rings=this._providers.map(p=>`${p.id}:${p.status}:${(p.windows??[]).map(w=>w.fraction).join(',')}:${headline(p,this._settings)?.fraction??''}:${(p.sessions??[]).map(s=>s.state).join('')}`).join('|');
         const cells=this._widgets.map(k=>`${k}:${JSON.stringify(this._widgetData[k]??null)}`).join('|');
         const look=[this._settings.edge,this._settings.scale,this._settings.textContrast,
-            this._settings.forecast,this._settings.quotaDisplay,this._settings.windowClock,this._settings.clock24,this._settings.clockSeconds,this._settings.dateStyle,this._settings.peek].join(',');
+            this._settings.forecast,this._settings.quotaDisplay,this._settings.windowClock,this._settings.clock24,this._settings.clockSeconds,this._settings.dateStyle,this._settings.peek,
+            this._settings.weeklyRing,this._settings.watchThreshold,this._settings.criticalThreshold,this._settings.bandStyle].join(',');
         return `${rings}#${cells}#${look}`;
     }
     // A poll that changes nothing should cost nothing: no repaint, no cairo.
@@ -358,6 +359,23 @@ export default class Codenotch extends Extension {
         this._cardScroll=clamp((this._cardScroll??0)+delta,0,Math.max(0,layout.contentHeight-layout.height));
         this._card.queue_repaint();
     }
+    /** A click on a session's auto-continue row flips it for that session. */
+    _onCardPress(event) {
+        if(event.get_button()!==1||this._hover?.kind!=='provider')return Clutter.EVENT_PROPAGATE;
+        const p=this._providers[this._hover.index];if(!p)return Clutter.EVENT_PROPAGATE;
+        const [x,y]=event.get_coords();
+        const ly=(y-this._card.y)/this._scale+(this._cardScroll??0),lx=(x-this._card.x)/this._scale;
+        if(lx<0||lx>D.cardWidth)return Clutter.EVENT_PROPAGATE;
+        const row=cardLayout(p,this._cardBudget,this._settings).toggles.find(t=>ly>=t.y-2&&ly<=t.y+t.height+2);
+        if(!row?.key||!row.available)return Clutter.EVENT_PROPAGATE;
+        const session=p.sessions.find(s=>s.key===row.key);
+        // Optimistic: the switch moves now; the worker confirms on the next snapshot.
+        session.autoContinue={...session.autoContinue,on:!row.on,next:null,error:null,running:false};
+        this._card.queue_repaint();
+        this._run(['--auto-continue',row.key,row.on?'off':'on']);
+        this._queued.push([]);   // then a real scan, which schedules the first nudge
+        return Clutter.EVENT_STOP;
+    }
     _showCard(hit,force=false) {
         if(!this._alive||!this._card)return;
         if(!hit||this._progress<.9||this._menu?.isOpen){
@@ -483,7 +501,8 @@ export default class Codenotch extends Extension {
         const before=JSON.stringify(this._settings);
         const oldIDs=this._snapshot?.providers?.map(p=>p.id).join('|');
         this._snapshot=data;this._settings={...DEFAULTS,...data.settings};
-        this._providers=data.providers.filter(p=>p.enabled&&(p.detected||p.windows?.length));
+        configureBands(this._settings);
+        this._providers=orderProviders(data.providers.filter(p=>p.enabled&&(p.detected||p.windows?.length)),this._settings);
         this._widgets=(this._settings.widgets??[]).filter(k=>k!=='battery'||data.widgets?.battery);
         this._widgetData=data.widgets??{};
         const newIDs=data.providers.map(p=>p.id).join('|');
@@ -565,6 +584,9 @@ export default class Codenotch extends Extension {
         this._panelLabel.visible=!!this._settings.panelUsage;
         this._panelLabel.set_style(selected?`color: ${band(headline(selected,this._settings).fraction)};`:'');
         const providers=this._snapshot.providers.filter(p=>p.enabled);
+        const waiting=providers.flatMap(p=>(p.sessions??[]).filter(s=>s.state==='waiting').map(s=>`${p.name} · ${s.name}`));
+        this._panelDot.visible=waiting.length>0;
+        this._panel.accessible_name=waiting.length?`Codenotch — waiting for you: ${waiting.join(', ')}`:'Codenotch';
         const ids=providers.map(p=>p.id).join('|');
         if(ids!==this._panelIDs&&!this._panel.menu.isOpen){
             this._panelAccounts.menu.removeAll();this._panelRows.clear();
@@ -583,6 +605,8 @@ export default class Codenotch extends Extension {
             const box=new St.BoxLayout({style:'spacing: 6px;'});
             box.add_child(new St.Icon({icon_name:'utilities-system-monitor-symbolic',style_class:'system-status-icon'}));
             this._panelLabel=new St.Label({y_align:Clutter.ActorAlign.CENTER,visible:!!this._settings.panelUsage});box.add_child(this._panelLabel);
+            // Visible even with the notch folded or hidden: an agent is waiting on you.
+            this._panelDot=new St.Widget({style_class:'codenotch-waiting-dot',y_align:Clutter.ActorAlign.CENTER,visible:false});box.add_child(this._panelDot);
             this._panel.add_child(box);
             this._panelAccounts=new PopupMenu.PopupSubMenuMenuItem('Usage overview');
             this._panel.menu.addMenuItem(this._panelAccounts);
@@ -601,7 +625,7 @@ export default class Codenotch extends Extension {
             for(const [label,fn] of entries){
                 const item=new PopupMenu.PopupMenuItem(label);item.connect('activate',fn);this._panel.menu.addMenuItem(item);
             }
-        }else if(!this._settings.panelIcon&&this._panel){this._panel.destroy();this._panel=null;this._panelIDs=null;}
+        }else if(!this._settings.panelIcon&&this._panel){this._panel.destroy();this._panel=null;this._panelIDs=null;this._panelDot=null;}
     }
 
     disable() {

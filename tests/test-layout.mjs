@@ -174,3 +174,63 @@ for(const kind of WIDGETS){
  const card=widgetCard(kind,{}),layout=widgetCardLayout(card);
  assert(Number.isFinite(layout.contentHeight)&&layout.contentHeight===layout.height,'Widget card background matches measured height');
 }
+
+// Auto-continue rows: hit-test positions come from the same layout that draws them.
+{
+    const {autoContinueText}=await import('../extension/render.js');
+    const plain=cardLayout({windows:[{}],sessions:[{state:'idle'}]},650);
+    const auto=cardLayout({windows:[{}],sessions:[{state:'idle',key:'claude#a',autoContinue:{available:true,on:false}},{state:'busy'}]},650);
+    assert.equal(plain.toggles.length,0);
+    assert.equal(auto.toggles.length,1);
+    assert.equal(auto.toggles[0].key,'claude#a');
+    assert.equal(auto.contentHeight,cardLayout({windows:[{}],sessions:[{},{}]},650).contentHeight+auto.toggles[0].height);
+    assert(auto.toggles[0].y>D.cardPad);
+    assert.equal(autoContinueText({available:true,on:false}),'Off');
+    assert.equal(autoContinueText({available:false}),'Needs tmux to auto-continue');
+    assert.match(autoContinueText({available:true,on:true,next:2000,blockedUntil:1900},1000),/After limit resets/);
+    assert.match(autoContinueText({available:true,on:true,next:2000},1000),/Next nudge/);
+    assert.equal(autoContinueText({available:true,on:true,running:true}),'Continuing in the background');
+}
+
+// Ring order, the weekly ring and adjustable colour thresholds.
+{
+    const {orderProviders,weeklyWindow}=await import('../extension/usage.js');
+    const {configureBands}=await import('../extension/render.js');
+    const now=1000;
+    const p=(id,f,reset,span=18000,extra=[])=>({id,kind:'claude',windows:[{id:'session',fraction:f,resetsAt:reset,windowSeconds:span},...extra]});
+    const a=p('a',.2,now+4*3600),b=p('b',.6,now+3600),c=p('c',1,now+600),d={id:'d',windows:[]};
+    const ids=list=>list.map(x=>x.id).join('');
+    assert.equal(ids(orderProviders([a,b,c,d],{ringOrder:'manual',providerOrder:['c','a']},now)),'cabd');
+    assert.equal(ids(orderProviders([b,c,d,a],{ringOrder:'remaining'},now)),'abcd');       // spent and unmeasured sink
+    assert.equal(ids(orderProviders([a,b,c,d],{ringOrder:'expiring'},now)),'bacd');
+    // Deficit: 70% left with 23h of a week to go beats 100% left with 6 days to go.
+    const week=604800;
+    const soon={id:'soon',windows:[{id:'weekly',fraction:.3,resetsAt:now+23*3600,windowSeconds:week}]};
+    const later={id:'later',windows:[{id:'weekly',fraction:0,resetsAt:now+6*86400,windowSeconds:week}]};
+    assert.equal(ids(orderProviders([later,soon],{ringOrder:'deficit'},now)),'soonlater');
+    // A spent weekly allowance sinks a ring whose session still has room.
+    const blocked=p('x',.1,now+600,18000,[{id:'weekly_all',fraction:1,resetsAt:now+86400,windowSeconds:week}]);
+    assert.equal(ids(orderProviders([blocked,b],{ringOrder:'remaining'},now)),'bx');
+    assert.equal(weeklyWindow(blocked).id,'weekly_all');
+    assert.equal(weeklyWindow(a),null);
+    assert.equal(weeklyWindow({windows:[{id:'primary',fraction:.1,windowSeconds:18000},{id:'secondary',fraction:.3,windowSeconds:week}],kind:'codex'}).id,'secondary');
+    configureBands({watchThreshold:50,criticalThreshold:80,bandStyle:'stepped'});
+    assert.equal(band(.49),P.yellow);assert.equal(band(.5),P.orange);assert.equal(band(.8),P.red);assert.equal(band(1),P.exhausted);assert.equal(band(.1),P.green);
+    configureBands({});
+    assert.equal(band(0),P.green);assert.equal(band(.5),P.yellow);assert.equal(band(.7),P.orange);
+}
+
+// Local runtimes: a label under the ring and a row per loaded model.
+{
+    const {runtimeLabel,modelDetail,isRuntime}=await import('../extension/render.js');
+    const now=10000;
+    const p={kind:'ollama',status:'ok',runtime:{models:[{name:'llama3:8b',size:5137025024,gpu:1,context:8192,params:'8B',quant:'Q4_0',expiresAt:now+240}]}};
+    assert(isRuntime(p));
+    assert.equal(runtimeLabel(p,now),'1 on');
+    assert.equal(runtimeLabel({...p,runtime:{models:[],speed:{speed:40.1,tokens:9,at:now-60}}},now),'40 t/s');
+    assert.equal(runtimeLabel({...p,status:'offline'},now),'off');
+    assert.equal(modelDetail(p.runtime.models[0],now),'8B · Q4_0 · 4.8 GB · GPU · 8K ctx · unloads in 4 min');
+    const l=cardLayout(p,650);
+    assert.equal(l.models.length,1);
+    assert.equal(cardLayout({...p,runtime:{models:[]}},650).notes[0],'No model loaded.');
+}

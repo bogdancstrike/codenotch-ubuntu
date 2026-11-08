@@ -156,6 +156,65 @@ and configurable API cost estimates. Enable local records in its Data tab.
 how many AIs are enabled, which widgets are on, your refresh cadence, and where your
 settings live.
 
+### Sessions, rings and colours
+
+- **Sessions by name.** A Claude Code session shows its `/rename` name, or else the
+  title Claude Code gave it, with the folder underneath. Codex threads use their own
+  title the same way.
+- **Session notifications** (General → Notifications, off by default). Tells you when
+  an agent finishes working or starts waiting for your input. A red dot also appears
+  on the top-bar icon while any agent is waiting, even with the notch folded.
+- **Fresh numbers at reset.** When a usage window rolls over before the next poll,
+  the poll moves to about 20 seconds after the reset.
+- **Ring order** (Appearance → Ring order): *Manual* with up/down buttons, *Most
+  remaining first*, *Burn deficit* (remaining quota minus remaining time, so quota
+  that would expire unused comes first) or *Expiring first*. The automatic orders
+  move spent and unmeasured rings to the end.
+- **Weekly ring** (Appearance → Usage display): a thin second ring for the weekly
+  limit, inside or outside the main ring.
+- **Ring colours** (Appearance → Ring colours): choose where a ring turns amber
+  (50–80%) and red (80–95%), and whether colours blend smoothly or step.
+
+### Local models: Ollama and LM Studio
+
+Both are off by default. Switch them on under General → AI accounts. Each ring reads
+only its own server on `127.0.0.1`: Ollama's `/api/ps` (the port can come from
+`OLLAMA_HOST`) and LM Studio's `/api/v1/models` (falling back to `/api/v0`, on the
+port from LM Studio's server settings). The card lists each loaded model with its
+size, quantisation, GPU share, context length and when it unloads. Under the ring
+you see LM Studio's last generation speed, taken from the timing line in its own
+server log, or else how many models are loaded. Nothing is loaded, unloaded or
+generated, and no prompt text is read. Ollama's cloud usage and a daily token
+count are not ported.
+
+### Auto-continue
+
+Point at an AI's ring and every running session in its card has an **↻ Auto-continue**
+row with a switch. Every switch starts **off**; click the row to turn it on for that
+session only.
+
+While it is on, a session that has sat **idle** for the interval (default **1 hour**) is
+sent the prompt *"continue if there are still tasks to implement that are not ready"*.
+Any activity restarts the count. If a 5-hour or weekly window is exhausted, nothing is
+sent until that window resets; the prompt goes out about 90 seconds after the reset. A
+session that is waiting for your answer is never prompted. The interval (15 min to 5 h)
+and the prompt text are under **General → Auto-continue**.
+
+How the prompt reaches the session:
+
+| Session | Route |
+| --- | --- |
+| Any terminal agent running inside **tmux** | Typed into its own pane and submitted, as if you typed it |
+| Claude Code, not in tmux | `claude -p --resume <id> "<prompt>"` in the session's folder, in the background |
+| Codex, not in tmux | `codex exec resume <id> "<prompt>"` in the session's folder, in the background |
+| Other agents, not in tmux | Not available; the row says *Needs tmux* |
+
+A background resume copies only the flags the session was started with
+(`--dangerously-skip-permissions`, `--permission-mode`, `--model`; for Codex the
+sandbox, bypass and model flags). It never adds permissions. Its output goes to
+`~/.cache/codenotch/auto-continue/<session>.log`, and the open terminal does not show
+that turn. Run the agent in tmux if you want to watch the work happen live.
+
 <div align="center">
 <img src="docs/preview-edges.png" alt="The notch on the top and bottom screen edges" width="680">
 <br><em>All four edges share one drawing path.</em>
@@ -234,6 +293,7 @@ codenotch verify all             # …or every enabled one
 codenotch weather                # force a widget refresh
 codenotch search "cluj napoca"   # geocode a weather location
 codenotch set pollSeconds 300    # any setting, as JSON
+codenotch set autoContinueMinutes 120   # auto-continue interval (15, 30, 60, 120, 180, 300)
 codenotch location '{"label":"Cluj","latitude":46.77,"longitude":23.6}'
 codenotch demo true              # sample data, no credentials, no network
 codenotch settings               # open preferences

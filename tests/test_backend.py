@@ -307,3 +307,12 @@ class ImmediateSettings(unittest.TestCase):
         p=Provider('codex','New name','codex',self.home)
         result=info_snapshot([p],DEFAULTS,{'codex':dict(id='codex',name='Old name')},{})
         self.assertEqual(result['providers'][0]['name'],'New name')
+
+
+class ResetAlignedPolling(unittest.TestCase):
+    def test_reset_before_cadence_pulls_poll_forward(self):
+        from codenotch.worker import next_poll
+        self.assertEqual(next_poll([dict(resetsAt=1300)],1000,600),1320)
+        self.assertEqual(next_poll([dict(resetsAt=1010)],1000,600),1060)   # never sooner than a minute
+        self.assertEqual(next_poll([dict(resetsAt=5000),dict(resetsAt=None)],1000,600),1600)
+        self.assertEqual(next_poll([dict(resetsAt=900)],1000,600),1600)

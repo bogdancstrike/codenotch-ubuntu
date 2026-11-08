@@ -13,3 +13,6 @@
 .codenotch-menu .popup-menu-item:hover { background-color: #232323; }
 .codenotch-menu .popup-sub-menu { background-color: #141414; border-radius: 11px; }
 .codenotch-menu .popup-menu-item:insensitive { color: #9AA0A6; }
+
+/* An agent is waiting for your reply. */
+.codenotch-waiting-dot { width: 7px; height: 7px; border-radius: 4px; background-color: #FF334F; margin-left: -2px; }

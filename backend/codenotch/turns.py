@@ -62,3 +62,22 @@ def claude_turn(path, now=None):
             busy=not interrupted;tool=False;stamp=when
     if not busy or stamp is None or not 0<=now-stamp<=(1800 if tool else 300): return None
     return dict(name='Claude',detail='Tool running' if tool else 'Turn in progress',state='busy',since=stamp,derived=False)
+
+
+def claude_title(path):
+    """What a Claude Code session is called: its `/rename` name, else the title
+    Claude Code generated. The registry's own name is the folder plus two
+    characters, so three sessions in one project would read as one.
+
+    A rename beats a newer generated title: Claude Code keeps appending
+    `ai-title` after a `/rename`, and the chosen name is the one people look for."""
+    generated=None
+    for row in reversed(list(tail_records(path))):
+        kind=row.get('type')
+        if kind=='custom-title':
+            title=str(row.get('customTitle') or '').strip()
+            if title: return title[:120]
+        elif kind=='ai-title' and generated is None:
+            title=str(row.get('aiTitle') or '').strip()
+            if title: generated=title[:120]
+    return generated

@@ -41,6 +41,23 @@ def kimi(data, now):
         seconds=duration*unit
         add(f'limit.{index}.{int(seconds)}',duration_label(seconds,'Usage'),row.get('detail'),seconds)
     add('weekly','Weekly allowance',data.get('usage'))
+    # The current shape: precise `used_ratio` per quota, including the monthly
+    # ones the legacy counts never carried. A ratio replaces the rounded count
+    # for the same window, in place.
+    usages=data.get('usages') if isinstance(data.get('usages'),dict) else {}
+    for key,wid,label,duration,replaces in (
+            ('limit_5h','rolling','5h limit',18000,lambda w:w['id'].startswith('limit.') and w.get('windowSeconds')==18000),
+            ('limit_7d','weekly','Weekly allowance',604800,lambda w:w['id']=='weekly'),
+            ('limit_month_total','monthly-total','Monthly limit',None,lambda w:False),
+            ('limit_month_code','monthly-code','Monthly code limit',None,lambda w:False)):
+        row=usages.get(key)
+        if not isinstance(row,dict) or isinstance(row.get('used_ratio'),bool): continue
+        ratio=count(row.get('used_ratio'))
+        if ratio is None or ratio<0: continue
+        fresh=window(wid,label,ratio*100,row.get('reset_time'),duration)
+        at=next((i for i,w in enumerate(out) if replaces(w)),None)
+        if at is None: out.append(fresh)
+        else: out[at:at+1]=[fresh]; out[:]=[w for i,w in enumerate(out) if i==at or not replaces(w)]
     return require(out)
 
 

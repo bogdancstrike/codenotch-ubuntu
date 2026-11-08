@@ -1,7 +1,7 @@
 // Geometry and palette ported from vinzdg/codenotch (MIT, Copyright 2026 Vinz).
 // Pure drawing module; used unchanged by GNOME and the screenshot harness.
 import {GLYPHS} from './glyphs.js';
-import {headline,percentText,elapsedWindow,forecast} from './usage.js';
+import {headline,percentText,elapsedWindow,forecast,weeklyWindow} from './usage.js';
 
 export const PX=44/117;
 export const D={
@@ -24,9 +24,24 @@ export const CONTRAST={normal:{dim:'#B4B4B4',muted:'#8A8A8A',faint:'#606060'},
     higher:{dim:'#F2F4F6',muted:'#C6CBD1',faint:'#93999F'}};
 export function tone(settings,name){return (CONTRAST[settings?.textContrast]??CONTRAST.high)[name]??P[name];}
 
+// Where a ring turns amber and red is the user's to move. Module state, like
+// the text engine: band() is called from everywhere a colour is chosen.
+let BANDS={watch:.7,critical:.9,stepped:false};
+export function configureBands(settings={}) {
+    const watch=Number.isFinite(settings.watchThreshold)?settings.watchThreshold/100:.7;
+    const critical=Number.isFinite(settings.criticalThreshold)?settings.criticalThreshold/100:.9;
+    BANDS={watch:clamp(watch,.2,.95),critical:clamp(Math.max(critical,watch+.05),.25,1),stepped:settings.bandStyle==='stepped'};
+}
+export function criticalLevel(){return BANDS.critical;}
 export function band(f) {
-    const stops=[[0,P.green],[.5,P.yellow],[.7,P.orange],[.9,P.red],[1,P.exhausted]];
+    const {watch,critical,stepped}=BANDS;
+    const stops=[[0,P.green],[Math.max(.05,watch-.2),P.yellow],[watch,P.orange],[critical,P.red],[1,P.exhausted]];
     const value=Math.max(0,Math.min(1,f));
+    if(stepped){
+        // Each colour holds until the next threshold is reached.
+        if(value>=1)return P.exhausted;
+        for(let i=stops.length-2;i>=0;i--)if(value>=stops[i][0])return stops[i][1];
+    }
     for(let i=1;i<stops.length;i++){
         const [end,to]=stops[i],[start,from]=stops[i-1];if(value>end)continue;
         const ratio=(value-start)/(end-start);
@@ -76,7 +91,7 @@ export function roundRect(cr,x,y,w,h,r) {
 }
 export function glyph(cr,name,cx,cy,size=D.glyph,alpha=1) {
     const scale={claude:.97,cursor:.97,openai:.94,glm:.95,opencode:.95}[name]??1;size*=scale;
-    if(!GLYPHS[name]){text(cr,({copilot:'GH',kimi:'K',extension:'+'})[name]??'AI',cx,cy+size*.32,size*.8,P.white,'center',W.bold,{alpha});return;}
+    if(!GLYPHS[name]){text(cr,({copilot:'GH',kimi:'K',extension:'+',ollama:'OL',lmstudio:'LM'})[name]??'AI',cx,cy+size*.32,size*.8,P.white,'center',W.bold,{alpha});return;}
     const loops=GLYPHS[name];
     cr.newPath();for(const loop of loops) {loop.forEach(([x,y],i)=>{const a=cx+(x-.5)*size,b=cy+(y-.5)*size;i?cr.lineTo(a,b):cr.moveTo(a,b);});cr.closePath();}
     color(cr,P.white,alpha);cr.setFillRule(1);cr.fill();cr.setFillRule(0);
@@ -360,13 +375,52 @@ export function drawWidget(cr,kind,data,settings,g,edge,cell,alpha,now=new Date(
 }
 
 // -------------------------------------------------------------------- rings
+// ------------------------------------------------------------ local runtimes
+export const RUNTIME_KINDS=['ollama','lmstudio'];
+export function isRuntime(p){return RUNTIME_KINDS.includes(p?.kind);}
+function gigabytes(bytes){return Number.isFinite(bytes)&&bytes>0?`${(bytes/1073741824).toFixed(bytes>=10737418240?0:1)} GB`:'';}
+/** Under a runtime's ring: its last speed while fresh, else how many models are loaded. */
+export function runtimeLabel(p,now=Date.now()/1000) {
+    if(p.status!=='ok')return 'off';
+    const speed=p.runtime?.speed;
+    if(speed&&Number.isFinite(speed.speed)&&now-speed.at<900)return `${Math.round(speed.speed)} t/s`;
+    const n=p.runtime?.models?.length??0;
+    return n?`${n} on`:'idle';
+}
+/** One line of facts per loaded model, all of them read from the server. */
+export function modelDetail(m,now=Date.now()/1000) {
+    const parts=[m.params,m.quant,gigabytes(m.size)];
+    if(Number.isFinite(m.gpu))parts.push(m.gpu>=.995?'GPU':m.gpu<=.005?'CPU':`${Math.round(m.gpu*100)}% GPU`);
+    if(Number.isFinite(m.context))parts.push(`${m.context>=1024?Math.round(m.context/1024)+'K':m.context} ctx`);
+    if(Number.isFinite(m.expiresAt)&&m.expiresAt>now)parts.push(m.expiresAt-now<3600?`unloads in ${Math.max(1,Math.round((m.expiresAt-now)/60))} min`:'stays loaded');
+    return parts.filter(Boolean).join(' · ');
+}
+function runtimeRing(cr,p,cx,cy,phase,alpha,settings) {
+    const loaded=(p.runtime?.models?.length??0)>0&&p.status==='ok';
+    cr.setLineCap(1);cr.newPath();cr.arc(cx,cy,(D.ring-D.track)/2,0,Math.PI*2);color(cr,P.track,alpha);cr.setLineWidth(D.track);cr.stroke();
+    if(loaded){cr.newPath();cr.arc(cx,cy,(D.ring-D.track)/2,0,Math.PI*2);color(cr,P.green,alpha*.55);cr.setLineWidth(D.stroke);cr.stroke();}
+    const activity=p.sessions?.find(s=>s.state==='busy');
+    if(activity){const r=16;cr.newPath();cr.arc(cx+Math.cos(phase)*r,cy+Math.sin(phase)*r,2.3,0,Math.PI*2);color(cr,P.green,alpha);cr.fill();}
+    glyph(cr,p.glyph,cx,cy,D.glyph,alpha);
+    text(cr,runtimeLabel(p),cx,cy+D.ring/2+D.gap+13,15,p.status==='ok'?P.white:tone(settings,'muted'),'center',W.semi,{alpha,tracking:-.2});
+}
+
 export function ring(cr,p,cx,cy,phase=0,alpha=1,settings={}) {
+    if(isRuntime(p))return runtimeRing(cr,p,cx,cy,phase,alpha,settings);
     const selected=headline(p,settings),f=selected?.fraction;
     const stale=!['ok','demo'].includes(p.status);
     cr.setLineCap(1);cr.newPath();cr.arc(cx,cy,(D.ring-D.track)/2,0,Math.PI*2);color(cr,P.track,alpha);cr.setLineWidth(D.track);cr.stroke();
     if(Number.isFinite(f)&&f>0){cr.newPath();cr.arc(cx,cy,(D.ring-D.track)/2,-Math.PI/2,-Math.PI/2+Math.PI*2*Math.min(1,f));color(cr,band(f),alpha*(stale?.4:1));cr.setLineWidth(D.stroke);cr.stroke();}
+    // A second, thinner ring for the week: inside the track or just outside it.
+    const weekly=settings.weeklyRing==='inner'||settings.weeklyRing==='outer'?weeklyWindow(p,settings):null;
+    if(weekly){
+        const inner=settings.weeklyRing==='inner',r=inner?13:D.ring/2+3,lw=inner?2:2.5;   // inner: clear of the glyph, under the activity dot's orbit
+        cr.newPath();cr.arc(cx,cy,r,0,Math.PI*2);color(cr,P.track,alpha*.8);cr.setLineWidth(lw);cr.stroke();
+        if(weekly.fraction>0){cr.newPath();cr.arc(cx,cy,r,-Math.PI/2,-Math.PI/2+Math.PI*2*Math.min(1,weekly.fraction));color(cr,band(weekly.fraction),alpha*(stale?.4:1));cr.setLineWidth(lw);cr.stroke();}
+    }
     const elapsed=settings.windowClock?elapsedWindow(selected):null;
-    if(elapsed!==null){cr.newPath();cr.arc(cx,cy,D.ring/2+3,-Math.PI/2,-Math.PI/2+2*Math.PI*elapsed);color(cr,tone(settings,'muted'),alpha*.7);cr.setLineWidth(1.5);cr.stroke();}
+    const clockRadius=weekly&&settings.weeklyRing==='outer'?D.ring/2+7:D.ring/2+3;
+    if(elapsed!==null){cr.newPath();cr.arc(cx,cy,clockRadius,-Math.PI/2,-Math.PI/2+2*Math.PI*elapsed);color(cr,tone(settings,'muted'),alpha*.7);cr.setLineWidth(1.5);cr.stroke();}
     const activity=p.sessions?.find(s=>s.state==='waiting')??p.sessions?.find(s=>s.state==='busy');
     if(activity){const busy=activity.state==='busy',r=16;cr.newPath();cr.arc(cx+(busy?Math.cos(phase)*r:0),cy+(busy?Math.sin(phase)*r:-r),2.3,0,Math.PI*2);color(cr,busy?P.green:P.amber,alpha);cr.fill();}
     glyph(cr,p.glyph,cx,cy,D.glyph,alpha);
@@ -398,7 +452,7 @@ export function drawNotch(cr,options={}) {
     const length=folded?g.length:pill.length+(g.length-pill.length)*shape;
     cr.translate(g.depth-depth,(g.length-length)/2);
     notchPath(cr,depth,length);color(cr,P.black);cr.fill();
-    const critical=providers.some(p=>p.status==='ok'&&(p.windows??[]).some(w=>w.fraction>=.9&&(!w.resetsAt||w.resetsAt>now.getTime()/1000)));
+    const critical=providers.some(p=>p.status==='ok'&&(p.windows??[]).some(w=>w.fraction>=BANDS.critical&&(!w.resetsAt||w.resetsAt>now.getTime()/1000)));
     if(settings.peek!==false||critical)drawHandle(cr,depth,length,folded?1:Math.max(0,1-clamp(progress)*5),critical);
     cr.restore();
     if(folded||progress<.02)return g;
@@ -435,19 +489,51 @@ function wrap(s,width=34){const words=String(s).split(/\s+/);const lines=[];let 
 
 // Card metrics. Bumped for legibility: nothing here is below 11.5px, and the
 // muted tones come from the contrast setting rather than a fixed grey.
-const C={header:D.cardGlyph+18,note:18,window:58,rule:20,session:44,more:22,
+const C={header:D.cardGlyph+18,note:18,window:58,rule:20,session:44,auto:24,more:22,switchW:30,switchH:16,
     title:16.5,label:14,reset:12,percent:13.5,note_:12.5,name:13.5,state:12,detail:12,bar:6};
 
 export function cardLayout(p,maxHeight=650,settings={}) {
     const windows=(p.windows??[]),notes=['ok'].includes(p.status)?[]:wrap(p.message??'No usage available.',34);
+    const models=isRuntime(p)&&p.status==='ok'?(p.runtime?.models??[]):[];
+    if(isRuntime(p)&&p.status==='ok'){
+        if(!models.length)notes.push('No model loaded.');
+        const speed=p.runtime?.speed;
+        if(speed&&Number.isFinite(speed.speed))notes.push(`Last generation ${speed.speed} t/s · ${speed.tokens} tokens`);
+    }
     if(p.status==='stale'&&p.updatedAt)notes.push(`Last reading: ${Math.max(0,Math.floor((Date.now()/1000-p.updatedAt)/60))} min ago`);
     const forecasts=settings.forecast&&p.status==='ok'?windows.map(w=>forecast(w)):windows.map(()=>null);
-    const base=2*D.cardPad+C.header+notes.length*C.note+windows.length*C.window+forecasts.filter(Boolean).length*20;
+    const base=2*D.cardPad+C.header+notes.length*C.note+windows.length*C.window+forecasts.filter(Boolean).length*20+models.length*C.session;
     const cap=Math.max(0,Math.min(12,Math.floor((maxHeight-base-C.rule)/C.session)));
     const sessions=p.sessions??[];
     const overflow=(p.sessions?.length??0)>sessions.length;
-    const contentHeight=base+(sessions.length?C.rule+sessions.length*C.session:0)+(overflow?C.more:0);
-    return {windows,notes,sessions,overflow,forecasts,contentHeight,height:Math.min(maxHeight,contentHeight)};
+    // Auto-continue rows sit under their session; their y is what the shell
+    // hit-tests, so it is computed here once rather than in two places.
+    const toggles=[];
+    let y=D.cardPad+C.header+notes.length*C.note+windows.length*C.window+forecasts.filter(Boolean).length*20+models.length*C.session+(sessions.length?C.rule:0);
+    for(const s of sessions){
+        y+=C.session;
+        if(s?.autoContinue){toggles.push({y,height:C.auto,key:s.key,on:!!s.autoContinue.on,available:!!s.autoContinue.available});y+=C.auto;}
+    }
+    const contentHeight=base+(sessions.length?C.rule+sessions.length*C.session:0)+toggles.length*C.auto+(overflow?C.more:0);
+    return {windows,notes,models,sessions,overflow,forecasts,toggles,contentHeight,height:Math.min(maxHeight,contentHeight)};
+}
+function clockText(at){return new Date(at*1000).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});}
+/** One line saying what auto-continue will do next for a session. */
+export function autoContinueText(a,now=Date.now()/1000) {
+    if(!a)return '';
+    if(!a.available)return 'Needs tmux to auto-continue';
+    if(!a.on)return 'Off';
+    if(a.running)return 'Continuing in the background';
+    if(a.error&&a.sentAt)return `Couldn’t send at ${clockText(a.sentAt)}`;
+    if(!a.next)return 'On · waiting for the next scan';
+    if(a.blockedUntil&&a.next>=a.blockedUntil)return `After limit resets · ${clockText(a.next)}`;
+    if(a.next<=now)return 'On · due now';
+    return `Next nudge ${clockText(a.next)}`;
+}
+export function drawSwitch(cr,x,y,on,enabled=true) {
+    const w=C.switchW,h=C.switchH,alpha=enabled?1:.35;
+    roundRect(cr,x,y,w,h,h/2);color(cr,on?P.green:P.track,alpha);cr.fill();
+    cr.newPath();cr.arc(on?x+w-h/2:x+h/2,y+h/2,h/2-2.5,0,2*Math.PI);color(cr,on?P.black:P.dim,alpha);cr.fill();
 }
 export function drawCard(cr,p,width=D.cardWidth,maxHeight=650,settings={}) {
     const l=cardLayout(p,maxHeight,settings),pad=D.cardPad,inner=width-2*pad;
@@ -456,7 +542,7 @@ export function drawCard(cr,p,width=D.cardWidth,maxHeight=650,settings={}) {
     color(cr,P.line,.6);cr.setLineWidth(1);roundRect(cr,.5,.5,width-1,l.contentHeight-1,D.cardCorner);cr.stroke();
     glyph(cr,p.glyph,pad+D.cardGlyph/2,pad+D.cardGlyph/2,D.cardGlyph);
     const titleLeft=pad+D.cardGlyph+11;
-    text(cr,fit(cr,`${p.name} usage`,C.title,W.semi,width-pad-titleLeft),titleLeft,pad+D.cardGlyph/2+6,C.title,P.white,'left',W.semi,{tracking:-.2});
+    text(cr,fit(cr,isRuntime(p)?`${p.name} · loaded models`:`${p.name} usage`,C.title,W.semi,width-pad-titleLeft),titleLeft,pad+D.cardGlyph/2+6,C.title,P.white,'left',W.semi,{tracking:-.2});
     let y=pad+C.header;
     for(const line of l.notes){text(cr,line,pad,y+11,C.note_,muted,'left',W.regular);y+=C.note;}
     for(const w of l.windows){
@@ -473,6 +559,11 @@ export function drawCard(cr,p,width=D.cardWidth,maxHeight=650,settings={}) {
         const prediction=l.forecasts[l.windows.indexOf(w)];
         if(prediction){text(cr,prediction,pad,y-2,11,muted);y+=20;}
     }
+    for(const m of l.models){
+        text(cr,fit(cr,m.name,C.name,W.medium,inner),pad,y+11,C.name,P.white,'left',W.medium);
+        text(cr,fit(cr,modelDetail(m),C.detail,W.regular,inner),pad,y+29,C.detail,muted,'left',W.regular);
+        y+=C.session;
+    }
     if(l.sessions.length){cr.newPath();cr.moveTo(pad,y+2);cr.lineTo(width-pad,y+2);color(cr,P.line);cr.setLineWidth(1);cr.stroke();y+=C.rule;}
     for(const s of l.sessions){
         const state=s.state==='busy'?'working':s.state;
@@ -483,6 +574,14 @@ export function drawCard(cr,p,width=D.cardWidth,maxHeight=650,settings={}) {
         const detail=String(s.detail??'');
         text(cr,fit(cr,detail,C.detail,W.regular,inner,detail.includes('/')),pad,y+29,C.detail,muted,'left',W.regular);
         y+=C.session;
+        if(s.autoContinue){
+            const a=s.autoContinue,status=autoContinueText(a);
+            drawSwitch(cr,width-pad-C.switchW,y+1,a.on,a.available);
+            const label='↻ Auto-continue',labelWidth=textWidth(cr,label,C.detail,W.medium)+8;
+            text(cr,label,pad,y+13,C.detail,a.on?P.white:dim,'left',W.medium);
+            text(cr,fit(cr,status,C.detail-.5,W.regular,inner-labelWidth-C.switchW-10),pad+labelWidth,y+13,C.detail-.5,a.on&&a.error?P.amber:a.on?P.green:muted,'left',W.regular);
+            y+=C.auto;
+        }
     }
     if(l.overflow)text(cr,`and ${p.sessions.length-l.sessions.length} more`,pad,y+11,C.detail,muted,'left',W.regular);
     return l;

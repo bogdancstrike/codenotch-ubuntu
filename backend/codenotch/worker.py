@@ -20,6 +20,8 @@ from . import widgets as widget_module
 from .alerts import evaluate as evaluate_alerts
 from .cache import current as current_reading
 from .accounts import profiles as clean_profiles, labels as clean_labels
+from . import autocontinue
+from .runtimes import KINDS as RUNTIMES, CADENCE as RUNTIME_CADENCE, message as runtime_message
 
 DEFAULTS=dict(
     edge='right',visibility='hover',scale=1.0,monitor=-1,disabled=[],demo=False,
@@ -31,13 +33,17 @@ DEFAULTS=dict(
     weatherPlace='',weatherLat=None,weatherLon=None,weatherUnits='metric',
     textContrast='high',pinnedWindows={},accountProfiles=[],accountLabels={},enabledExtras=[],enabledExtensions=[],usageHistory=False,historyDays=365,modelPrices={},
     forecast=False,quotaDisplay='used',windowClock=False,panelUsage=True,panelAccount='',
-    notifyQuota=False,notifyReset=False,notifyFailures=False,notifyThreshold=90,
+    notifyQuota=False,notifyReset=False,notifyFailures=False,notifyThreshold=90,notifySessions=False,
+    ringOrder='manual',providerOrder=[],weeklyRing='off',watchThreshold=70,criticalThreshold=90,bandStyle='smooth',
+    autoContinue={},autoContinueMinutes=autocontinue.DEFAULT_MINUTES,autoContinuePrompt=autocontinue.DEFAULT_PROMPT,
 )
 EDGES=('right','left','top','bottom')
 VISIBILITIES=('hover','always','hidden')
 CORNERS=('start','center','end')
 DATE_STYLES=('short','medium','long')
 POLL_CHOICES=(60,90,150,300,600,1800)
+# Off until switched on: borrowed sign-ins, and local runtimes that answer every poll.
+OPT_IN=('copilot','kimi','ollama','lmstudio')
 
 def locations():
     home=Path.home()
@@ -111,7 +117,7 @@ def configuration(config):
         out['modelPrices']=clean_prices(out['modelPrices'])
     elif not isinstance(out['modelPrices'],dict): out['modelPrices']={}
     out['enabledExtensions']=[x for x in out['enabledExtensions'] if isinstance(x,str) and x.startswith('extension:')] if isinstance(out['enabledExtensions'],list) else []
-    out['enabledExtras']=[x for x in out['enabledExtras'] if x in ('copilot','kimi')] if isinstance(out['enabledExtras'],list) else []
+    out['enabledExtras']=[x for x in out['enabledExtras'] if x in OPT_IN] if isinstance(out['enabledExtras'],list) else []
     out['accountProfiles']=clean_profiles(out['accountProfiles'])
     out['accountLabels']=clean_labels(out['accountLabels'])
     pins=out['pinnedWindows']
@@ -129,7 +135,18 @@ def configuration(config):
     if not isinstance(out['panelAccount'],str): out['panelAccount']=''
     if out['quotaDisplay'] not in ('used','remaining'): out['quotaDisplay']='used'
     if out['notifyThreshold'] not in (75,80,90,95): out['notifyThreshold']=90
-    for key in ('usageHistory','forecast','panelUsage','windowClock','notifyQuota','notifyReset','notifyFailures','demo','panelIcon','hideFullscreen','peek','clock24','clockSeconds'):
+    if out['ringOrder'] not in ('manual','remaining','deficit','expiring'): out['ringOrder']='manual'
+    order=out['providerOrder'] if isinstance(out['providerOrder'],list) else []
+    out['providerOrder']=list(dict.fromkeys(x for x in order if isinstance(x,str) and 0<len(x)<200))[:100]
+    if out['weeklyRing'] not in ('off','inner','outer'): out['weeklyRing']='off'
+    if out['bandStyle'] not in ('smooth','stepped'): out['bandStyle']='smooth'
+    if out['watchThreshold'] not in (50,60,70,80): out['watchThreshold']=70
+    if out['criticalThreshold'] not in (80,85,90,95): out['criticalThreshold']=90
+    if out['criticalThreshold']<=out['watchThreshold']: out['watchThreshold'],out['criticalThreshold']=70,90
+    out['autoContinue']=autocontinue.clean_keys(out['autoContinue'])
+    out['autoContinueMinutes']=autocontinue.clean_minutes(out['autoContinueMinutes'])
+    out['autoContinuePrompt']=autocontinue.clean_prompt(out['autoContinuePrompt'])
+    for key in ('usageHistory','forecast','panelUsage','windowClock','notifyQuota','notifyReset','notifyFailures','notifySessions','demo','panelIcon','hideFullscreen','peek','clock24','clockSeconds'):
         out[key]=bool(out[key])
     try: out['revision']=str((config/'codenotch/settings.json').stat().st_mtime_ns)
     except OSError: out['revision']='0'
@@ -147,6 +164,15 @@ def apply_settings(args,config,root):
             if key in ('weatherPlace','weatherLat','weatherLon'):
                 raise ValueError('Use --location: a place name and its coordinates must be written together')
             settings[key]=json.loads(value); changed=True
+        if getattr(args,'auto_continue',None):
+            # One key at a time under the lock: the shell toggles a single
+            # session and must not overwrite a toggle made in another session.
+            key,state=args.auto_continue
+            if not autocontinue.KEY.match(key) or state not in ('on','off'): raise ValueError('Bad auto-continue toggle')
+            keys=dict(settings['autoContinue'])
+            if state=='on': keys[key]=time.time()
+            else: keys.pop(key,None)
+            settings['autoContinue']=keys; changed=True
         if getattr(args,'location',None) is not None:
             # One write, because configuration() drops a half-set location and a
             # key-at-a-time update could therefore never complete one.
@@ -160,7 +186,7 @@ def apply_settings(args,config,root):
             if args.enable:
                 disabled.discard(args.enable)
                 if args.enable.startswith('extension:') and args.enable not in settings['enabledExtensions']: settings['enabledExtensions'].append(args.enable)
-                if args.enable in ('copilot','kimi') and args.enable not in settings['enabledExtras']: settings['enabledExtras'].append(args.enable)
+                if args.enable in OPT_IN and args.enable not in settings['enabledExtras']: settings['enabledExtras'].append(args.enable)
             if args.disable: disabled.add(args.disable)
             settings['disabled']=sorted(disabled); changed=True
         if changed:
@@ -169,7 +195,7 @@ def apply_settings(args,config,root):
         return settings
 
 def is_enabled(p,settings):
-    return p.id not in settings['disabled'] and (p.kind!='extension' or p.id in settings['enabledExtensions']) and (p.kind not in ('copilot','kimi') or p.id in settings['enabledExtras'])
+    return p.id not in settings['disabled'] and (p.kind!='extension' or p.id in settings['enabledExtensions']) and (p.kind not in OPT_IN or p.id in settings['enabledExtras'])
 
 def demo_snapshot(providers,settings,cache_root):
     values={'claude':[73,7],'codex':[21,9],'cursor':[52,28],'gemini':[35,18],'glm':[12,8],'grok':[8],'opencode':[32,10,4]}
@@ -198,7 +224,7 @@ def demo_snapshot(providers,settings,cache_root):
     return dict(version=__version__,settings=settings,providers=out,widgets=demo_widgets,generatedAt=now)
 
 def source_name(p):
-    return {'extension':'Local opt-in quota program', 'copilot':'GitHub Copilot local OAuth login', 'kimi':'Kimi config or OpenCode coding-plan key', 'claude':'Claude Code OAuth · '+str(p.path/'.credentials.json'),'codex':'Codex sign-in · '+str(p.path/'auth.json'),'cursor':'Cursor signed-in SQLite session','gemini':'Antigravity IDE or `agy` CLI sign-in','glm':'Z.ai key borrowed from Claude Code, OpenCode, or ZCode','grok':'Grok CLI session · '+str(p.path),'opencode':'OpenCode Go key · '+str(p.path)}[p.kind]
+    return {'extension':'Local opt-in quota program', 'copilot':'GitHub Copilot local OAuth login', 'kimi':'Kimi config or OpenCode coding-plan key', 'claude':'Claude Code OAuth · '+str(p.path/'.credentials.json'),'codex':'Codex sign-in · '+str(p.path/'auth.json'),'cursor':'Cursor signed-in SQLite session','gemini':'Antigravity IDE or `agy` CLI sign-in','glm':'Z.ai key borrowed from Claude Code, OpenCode, or ZCode','grok':'Grok CLI session · '+str(p.path),'opencode':'OpenCode Go key · '+str(p.path),'ollama':'Local Ollama server · loopback only','lmstudio':'Local LM Studio server · loopback only'}[p.kind]
 
 def local_state(p,old,settings,home,config,data,force=None):
     """Everything that cannot block: enablement, detection, running sessions.
@@ -222,19 +248,38 @@ def local_state(p,old,settings,home,config,data,force=None):
         return base,False
     return base,True
 
+RESET_LAG=20
+
+def next_poll(windows,now,cadence):
+    """A window that rolls over before the next scheduled poll pulls the poll
+    forward to just after its reset, so the ring, the reset alert and
+    auto-continue see the new allowance within seconds rather than minutes."""
+    resets=[w['resetsAt'] for w in windows if isinstance(w.get('resetsAt'),(int,float)) and w['resetsAt']>now]
+    due=now+cadence
+    if resets: due=min(due,max(now+60,min(resets)+RESET_LAG))
+    return due
+
 def fetch_provider(p,base,old,settings,home,config,data):
     """The blocking half: one usage request, with backoff bookkeeping."""
     now=time.time()
     old=current_reading(old,now)
     cadence=settings['pollSeconds'] if base.get('sessions') else settings['idlePollSeconds']
+    runtime=p.kind in RUNTIMES
+    if runtime: cadence=RUNTIME_CADENCE
     try:
-        windows=p.fetch(home,config,data)
+        result=p.fetch(home,config,data)
         base['attempts']=p.attempts or [dict(route='endpoint',state='ok')]
-        return {**base,'status':'ok','windows':windows,'message':'Connection verified. Usage returned by the provider.','updatedAt':now,'checkedAt':now,'nextPoll':now+cadence,'retryAt':0,'failures':0}
+        # A local runtime answers with loaded models instead of usage windows.
+        extra={'runtime':result.get('runtime')} if isinstance(result,dict) else {}
+        windows=result.get('windows',[]) if isinstance(result,dict) else result
+        message=runtime_message(p.kind,result) if runtime else 'Connection verified. Usage returned by the provider.'
+        return {**base,**extra,'status':'ok','windows':windows,'message':message,'updatedAt':now,'checkedAt':now,'nextPoll':next_poll(windows,now,cadence),'retryAt':0,'failures':0}
     except ProviderError as err:
         base['attempts']=p.attempts or [dict(route='endpoint',state=err.status)]
         count=min(10,old.get('failures',0)+1)
         delay=max(60*2**min(count-1,4),err.retry) if err.status=='rateLimited' else max(60,cadence)
+        if runtime:   # a stopped server has no last-known models worth keeping
+            return {**base,'status':err.status,'errorStatus':err.status,'message':err.message,'windows':[],'runtime':None,'checkedAt':now,'nextPoll':now+max(60,cadence),'retryAt':0,'failures':0}
         return {**base,'status':'stale' if old.get('windows') else err.status,'errorStatus':err.status,'message':err.message,'windows':old.get('windows',[]),'checkedAt':now,'nextPoll':now+delay,'retryAt':now+delay if err.status=='rateLimited' else 0,'failures':count}
     except (ValueError,TypeError,KeyError,AttributeError,OSError):
         return {**base,'status':'stale' if old.get('windows') else 'error','message':'Local state or provider response could not be parsed.','windows':old.get('windows',[]),'checkedAt':now,'nextPoll':now+max(60,cadence)}
@@ -248,7 +293,12 @@ def info_snapshot(providers,settings,old,widget_cache):
     for p in providers:
         row={**current_reading(old.get(p.id,{}),time.time()),**p.meta(),'enabled':is_enabled(p,settings),'source':source_name(p)}
         if not row['enabled']:
-            row.update(status='disabled',detected=False,windows=[],sessions=[],message='Disconnected here. The owning tool remains signed in.')
+            row.update(status='disabled',detected=False,windows=[],sessions=[],runtime=None,message='Disconnected here. The owning tool remains signed in.')
+        elif row.get('sessions'):
+            # Cached sessions carry the switch state of their scan; a toggle
+            # answered from cache must already show the new position.
+            row['sessions']=[{**x,'autoContinue':{**x['autoContinue'],'on':x.get('key') in settings['autoContinue']}}
+                             if isinstance(x,dict) and isinstance(x.get('autoContinue'),dict) else x for x in row['sessions']]
         rows.append(row)
     return dict(version=__version__,settings=settings,widgets=widget_cache.get('current',{}),providers=rows)
 
@@ -278,7 +328,7 @@ def collect(args):
     if getattr(args,'diagnostics',False):
         from .diagnostics import report
         return {'report':report(info_snapshot(providers,settings,old,widget_cache)['providers'],time.time())}
-    if args.set or args.enable or args.disable or getattr(args,'location',None) is not None:
+    if args.set or args.enable or args.disable or getattr(args,'location',None) is not None or getattr(args,'auto_continue',None):
         with Lock(root/'settings.lock'):
             settings=configuration(config)
             snapshot=info_snapshot(discover(home,config,data,settings),settings,old,widget_cache)
@@ -308,13 +358,16 @@ def collect(args):
                 current=widget_job.result()
         else:
             current=safe_widgets(settings,widget_cache,force_widgets)
+        # Outside the settings lock: a tmux delivery takes a few hundred ms.
+        # Settings are re-read so a session switched off a moment ago is honoured.
+        run_auto_continue(rows,configuration(config),root)
         with Lock(root/'settings.lock'):
             # A slow in-flight request must never overwrite newer settings or
             # restore a disabled account's cached usage after the user saved.
             settings=configuration(config)
             snapshot=info_snapshot(discover(home,config,data,settings),settings,{r['id']:r for r in rows},{'current':current})
             alert_path=root/'alerts.json';memory=read_json(alert_path)
-            if any(settings.get(k) for k in ('notifyQuota','notifyReset','notifyFailures')) or memory:
+            if any(settings.get(k) for k in ('notifyQuota','notifyReset','notifyFailures','notifySessions')) or memory:
                 memory=evaluate_alerts(snapshot['providers'],settings,memory,time.time())
                 atomic_json(alert_path,memory)
             snapshot.update(generatedAt=time.time(),alerts=memory.get('pending',[]))
@@ -322,6 +375,18 @@ def collect(args):
             atomic_json(root/'widgets.json',{**widget_cache,'current':current})
 
         return snapshot
+
+def run_auto_continue(rows,settings,root):
+    path=root/'autocontinue.json';memory=read_json(path)
+    if not settings['autoContinue'] and not memory:
+        autocontinue.evaluate(rows,settings,{},time.time())   # annotate and strip
+        return
+    try:
+        memory=autocontinue.evaluate(rows,settings,memory,time.time(),
+            lambda key,t,prompt: autocontinue.deliver(t,prompt,autocontinue.log_path(root,key)))
+        atomic_json(path,memory if settings['autoContinue'] else {})
+    except (OSError,ValueError,TypeError,KeyError,AttributeError):
+        autocontinue.strip(rows)
 
 def safe_widgets(settings,cache,force):
     try:
@@ -339,6 +404,7 @@ def main():
     parser.add_argument('--set',nargs=2,metavar=('KEY','JSON'))
     parser.add_argument('--search',metavar='PLACE',help='Search weather locations by name')
     parser.add_argument('--widgets',action='store_true',help='Force a widget refresh (weather, system)')
+    parser.add_argument('--auto-continue',nargs=2,metavar=('SESSION','STATE'),help='Turn auto-continue on or off for one session key')
     parser.add_argument('--location',metavar='JSON',help='Set the weather place and its coordinates together; {} clears it')
     group=parser.add_mutually_exclusive_group(); group.add_argument('--enable'); group.add_argument('--disable')
     args=parser.parse_args()

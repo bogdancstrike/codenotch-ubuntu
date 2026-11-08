@@ -48,3 +48,50 @@ export function forecast(window, now=Date.now()/1000) {
     if(secondsLeft<=7200)return `May run out in ~${Math.max(1,Math.round(secondsLeft/60))} min`;
     return 'May run out before reset';
 }
+
+// ------------------------------------------------------------- ring order
+const WEEK=604800;
+/** The weekly window shown as a second ring, never the headline itself. */
+export function weeklyWindow(provider, settings={}) {
+    const main=headline(provider,settings);
+    const windows=(provider.windows??[]).filter(w=>w!==main&&Number.isFinite(w.fraction)&&w.fraction>=0);
+    const plain=w=>!String(w.id??'').includes('.');
+    return windows.find(w=>plain(w)&&Math.abs((w.windowSeconds??0)-WEEK)<=86400)
+        ??windows.find(w=>['weekly_all','weekly','seven_day','limit_7d'].includes(w.id))
+        ??windows.find(w=>plain(w)&&/week/i.test(`${w.id} ${w.label}`))??null;
+}
+
+/** Spent rings sink: the headline, or a weekly allowance, is used up. */
+function spent(p, settings, now) {
+    const live=w=>w&&w.fraction>=1&&!w.overageAllowed&&(!w.resetsAt||w.resetsAt>now);
+    return live(headline(p,settings))||live(weeklyWindow(p,settings));
+}
+
+/**
+ * In what order the notch draws its rings.
+ *  manual    — `providerOrder`, then anything new in discovery order
+ *  remaining — most left of the headline window first
+ *  deficit   — remaining quota minus remaining time, highest first: 70% left
+ *              with 23h of a week to go outranks 100% left with 6 days to go
+ *  expiring  — the headline window that resets soonest first
+ * Under every automatic sort, spent and unmeasured rings sink below usable ones.
+ */
+export function orderProviders(providers, settings={}, now=Date.now()/1000) {
+    const mode=settings.ringOrder??'manual';
+    const manual=settings.providerOrder??[];
+    const position=p=>{const i=manual.indexOf(p.id);return i<0?manual.length+providers.indexOf(p):i;};
+    if(mode==='manual')return [...providers].sort((a,b)=>position(a)-position(b));
+    const score=p=>{
+        const w=headline(p,settings);
+        if(!w)return [2,0];
+        if(spent(p,settings,now))return [1,0];
+        const left=1-w.fraction;
+        if(mode==='remaining')return [0,-left];
+        const until=Number.isFinite(w.resetsAt)&&w.resetsAt>now?w.resetsAt-now:Infinity;
+        if(mode==='expiring')return [0,until];
+        const span=w.windowSeconds;
+        if(!Number.isFinite(span)||span<=0||until===Infinity)return [0,1-left];   // unknown pace: after measurable deficits
+        return [0,-(left-until/span)];
+    };
+    return providers.map(p=>[p,score(p)]).sort((a,b)=>a[1][0]-b[1][0]||a[1][1]-b[1][1]||position(a[0])-position(b[0])).map(r=>r[0]);
+}
