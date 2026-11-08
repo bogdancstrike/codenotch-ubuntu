@@ -489,7 +489,7 @@ function wrap(s,width=34){const words=String(s).split(/\s+/);const lines=[];let 
 
 // Card metrics. Bumped for legibility: nothing here is below 11.5px, and the
 // muted tones come from the contrast setting rather than a fixed grey.
-const C={header:D.cardGlyph+18,note:18,window:58,rule:20,session:44,auto:24,more:22,switchW:30,switchH:16,
+const C={header:D.cardGlyph+18,note:18,window:58,rule:20,session:44,auto:32,more:22,switchW:30,switchH:16,
     title:16.5,label:14,reset:12,percent:13.5,note_:12.5,name:13.5,state:12,detail:12,bar:6};
 
 export function cardLayout(p,maxHeight=650,settings={}) {
